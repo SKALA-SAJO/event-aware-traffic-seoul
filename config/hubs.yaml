@@ -25,10 +25,11 @@ train:
   seeds: [42, 7, 2026]      # 실험 결과는 이 시드들의 평균으로 보고
   feature_stage: full       # speed | volume | calendar | full  (실험 ① 결과로 결정)
   event_mode: decay         # none | flag | scale | decay | text (실험 ② 결과로 결정)
-  # 이벤트 피처로 쓰는 출처 (실험 ⑤, 시드 3개): 경기만 1.611 ± 0.020 < 이벤트 없음 1.657 < +KOPIS 1.664~1.682.
-  # KOPIS 공연·서울시 문화행사는 수집·대시보드 표시·드리프트 판정 제외에는 쓰고, 피처에는 아직 넣지 않음
-  # (21개월간 거점별 수십 건뿐이고 경기장 콘서트·공원 축제가 한 규모 값에 섞여 일관된 효과를 배우지 못함).
-  event_sources: [kbo_schedule, kleague_schedule, csv, manual]   # csv·manual = 사람이 정리·등록한 집회 등
+  # 이벤트 피처로 쓰는 출처 (실험 ⑤·⑥, 시드 3개, 같은 평가 시간 기준).
+  #   ⑤ KOPIS 공연·서울시 문화행사: 넣으면 나빠짐(1.611 → 1.651~1.682) → 피처 제외 (표시·드리프트 제외에만 사용)
+  #   ⑥ 경찰청 집회(smpa) + 학습 데이터 2023~: 1.747 → 1.705 로 가장 좋음 → 채택 (과거 2년만: 1.730, 집회만: 1.763)
+  #   csv·manual = 사람이 정리·등록한 일정(A매치 등)
+  event_sources: [kbo_schedule, kleague_schedule, csv, manual, smpa]
 
 gates:
   # 배포 게이트 ① 평상 시간대 RMSE(km/h) 상한. null 이면 같은 평가 구간의 단순 예측법(지난주 같은 시각)
@@ -104,6 +105,7 @@ hubs:
     center: [37.5280, 126.9200]
     event_types: [rally, festival, marathon]
     police_stations: [영등포]
+    rally_dong_keywords: [여의, 의사당]   # 영등포서 관할 중 여의도 집회만 (경찰청 자료 동 표기 부분 일치)
     venues: [여의도공원, 여의도한강공원, 여의서로, 여의대로]   # 서울시 문화행사 PLACE 매칭 (도로에 붙은 야외 장소만)
     kopis_districts: [1156]      # KOPIS 공연시설 검색 구 코드 (signgucodesub)
     corridors:

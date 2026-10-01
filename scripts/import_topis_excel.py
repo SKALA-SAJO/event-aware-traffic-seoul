@@ -55,7 +55,10 @@ def _melt(df, id_cols, hour_cols):
 
 
 def _read(path: str, data_sheet: bool = False) -> pd.DataFrame:
-    """교통량 파일은 '범례' 시트가 앞에 있으므로 '일자' 열이 있는 첫 시트를 데이터로 씀."""
+    """교통량 파일은 '범례' 시트가 앞에 있으므로 '일자' 열이 있는 첫 시트를 데이터로 씀.
+    .csv 는 같은 열 구성의 CSV (data/raw/speed_2023_01.csv 처럼 팀이 엑셀을 CSV 로 저장한 것)."""
+    if path.endswith(".csv"):
+        return pd.read_csv(path, encoding="utf-8-sig")
     if not data_sheet:
         return pd.read_excel(path, engine="calamine")
     for name, df in pd.read_excel(path, sheet_name=None, engine="calamine").items():

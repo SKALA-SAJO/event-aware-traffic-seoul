@@ -78,7 +78,8 @@ def list_events(hub: str | None = None, start: dt.datetime | None = None, end: d
     df = df.astype(object).where(pd.notna(df), None)
     for c in ("start", "end", "announced_at", "status_changed_at"):
         df[c] = df[c].map(lambda v: v.strftime(storage.TS_FMT) if v is not None else None)
-    return df.to_dict(orient="records")
+    # pandas 3 는 문자열 열의 None 을 NaN 으로 바꾸므로 JSON 직전에 다시 None 으로
+    return [{k: (None if isinstance(v, float) and v != v else v) for k, v in r.items()} for r in df.to_dict(orient="records")]
 
 
 @router.patch("/{event_id}/status")

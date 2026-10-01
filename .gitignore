@@ -29,9 +29,13 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 data/synthetic/
-data/raw/
+# 원천 데이터: TOPIS 엑셀·CSV 는 대용량이라 제외(scripts/bootstrap_data.sh 로 재구성),
+# 이벤트 입력(집회·A매치·통제 공지, 약 2.5MB)과 출처 문서는 재현을 위해 커밋
+data/raw/*
+!data/raw/events/
 data/uploads/*
 !data/uploads/.gitkeep
+data/sample_haic_prices.csv
 mlflow.db
 mlflow_synthetic.db
 mlruns/
@@ -40,6 +44,11 @@ serving_app/models/*.keras
 serving_app/models/*.pkl
 serving_app/models/preprocess.json
 
-# API 키 (커밋·이미지에 포함 금지)
+# 실시간 수집 산출물: GitHub Actions 는 data-collect 브랜치에 쌓으므로, 로컬에서
+# scripts/collect_snapshot.py · collect_events.py 를 돌려 생긴 collected/ 는 커밋하지 않음
+collected/
+
+# API 키 (커밋·이미지에 포함 금지). 키 이름만 적은 예시 파일은 허용
 .env
 .env.*
+!.env.example

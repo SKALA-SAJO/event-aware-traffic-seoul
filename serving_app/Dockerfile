@@ -19,8 +19,11 @@ COPY scripts/ scripts/
 # 빌드 시점에 base 학습 → 게이트 → Production 승격까지 끝내 둔 자기 완결형 이미지.
 # 합성 데이터로 만들려면: docker build --build-arg DATA=synthetic ...
 ARG DATA=real
-COPY data/traffic.db data/traffic.db
-RUN if [ "$DATA" = "synthetic" ]; then rm data/traffic.db && python scripts/generate_synthetic_data.py; fi \
+# data/traffic.d[b]: DB 가 없어도(새로 clone) 빌드가 실패하지 않도록 glob 으로 복사 (__init__.py 는 항상 있음)
+COPY data/__init__.py data/traffic.d[b] data/
+RUN if [ "$DATA" = "synthetic" ] || [ ! -f data/traffic.db ]; then \
+      echo "data/traffic.db 없음 → 합성 데이터로 빌드 (실데이터: README '재현 방법' 참고)"; \
+      rm -f data/traffic.db && python scripts/generate_synthetic_data.py; fi \
  && python serving_app/train_and_register.py
 
 EXPOSE 8099

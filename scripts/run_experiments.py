@@ -329,6 +329,59 @@ def run_source_comparison(obs, events, seeds: list[int], epochs: int) -> pd.Data
     return df
 
 
+# ───────────────────────────────── 실험 ⑥ ─────────────────────────────────
+
+EXPANSION = {  # 이름 → (피처로 쓸 이벤트 출처, 학습 데이터 시작일)
+    "current": (["kbo_schedule", "kleague_schedule", "csv", "manual"], "2025-01-01"),
+    "+rallies": (["kbo_schedule", "kleague_schedule", "csv", "manual", "smpa"], "2025-01-01"),
+    "+2y": (["kbo_schedule", "kleague_schedule", "csv", "manual"], "2023-01-01"),
+    "+rallies+2y": (["kbo_schedule", "kleague_schedule", "csv", "manual", "smpa"], "2023-01-01"),
+    # 최종 후보 검증 (집회 + 과거 2년 기준에서 하나씩 빼고/더하기)
+    "-amatch": (["kbo_schedule", "kleague_schedule", "csv", "smpa"], "2023-01-01"),
+    "+notice": (["kbo_schedule", "kleague_schedule", "csv", "manual", "smpa", "topis_notice"], "2023-01-01"),
+}
+EXPANSION_ONLY = os.getenv("EXP6_ONLY")  # 일부 설정만 추가로 돌릴 때 (예: "+2y")
+EXPANSION_LABELS = {"calendar": "이벤트 정보 없음 (2025~)", "current": "현재: 경기·A매치 (2025~)",
+                    "+rallies": "+ 경찰청 집회 (2025~)", "+2y": "+ 과거 2년, 집회 없음 (2023~)",
+                    "+rallies+2y": "+ 경찰청 집회 + 과거 2년 (2023~)",
+                    "-amatch": "집회 + 과거 2년, A매치 제외", "+notice": "집회 + 과거 2년 + TOPIS 통제 공지"}
+
+
+def run_data_expansion(obs, events, seeds: list[int], epochs: int) -> pd.DataFrame:
+    print("[실험 ⑥] 데이터 확장")
+    first = min(pd.Timestamp(v[1]) for v in EXPANSION.values())
+    obs = obs[obs["ts"] >= first]
+    widest = Runner(obs, events, epochs, use_mlflow=False)
+    mask = {u: f["is_event"] for u, f in widest.frames_for(FeatureSpec(corridor_ids(), "full", "flag")).items()}
+
+    def runner_for(start):
+        r = Runner(obs[obs["ts"] >= pd.Timestamp(start)], events, epochs, use_mlflow=False)
+        return r
+
+    base = runner_for("2025-01-01")
+    rows = [{"config": "naive", "seed": 0, **base.naive()}]
+    cal = FeatureSpec(corridor_ids(), "calendar")
+    for u, f in base.frames_for(cal).items():
+        f["is_event"] = mask[u].reindex(f.index).fillna(False).astype(bool)
+    if not EXPANSION_ONLY:
+        for seed in seeds:
+            rows.append({"config": "calendar", "seed": seed, **base.run(cal, seed)})
+    mode = section("train")["event_mode"]
+    for name, (sources, start) in EXPANSION.items():
+        if EXPANSION_ONLY and name not in EXPANSION_ONLY.split(","):
+            continue
+        r = runner_for(start)
+        spec = FeatureSpec(corridor_ids(), "full", mode, event_sources=sources)
+        for u, f in r.frames_for(spec).items():
+            f["is_event"] = mask[u].reindex(f.index).fillna(False).astype(bool)  # 평가 기준 통일
+        print(f"  {name}: 학습 시작 {start}, 이벤트 출처 {sources}")
+        for seed in seeds:
+            rows.append({"config": name, "seed": seed, **r.run(spec, seed)})
+    df = pd.DataFrame(rows)
+    df.to_csv(os.path.join(OUT_DIR, "exp6.csv"), index=False)
+    return df
+
+
 # ───────────────────────────────── 리포트 ─────────────────────────────────
 
 def write_summary(results: dict, seeds, epochs, source: str):
@@ -342,6 +395,11 @@ def write_summary(results: dict, seeds, epochs, source: str):
                   + ". 가정 - 과거 경기 일정 공개 시각 = 경기 7일 전, 우천취소 공지 = 시작 2시간 전, 규모 = 경기장·공연장 "
                   "수용 인원(관중 수 아님). KOPIS 공개 시각 = 첫 공연 전 마지막 갱신 시각(없으면 30일 전 가정), "
                   "서울시 문화행사 공개 시각 = 등록일. 집회 일정은 아직 없습니다.", ""]
+    lines += ["> 실험별 기준 설정 (2026-10-01): ② ⑥ = 최종 설정(속도 2023~, 경기·A매치·경찰청 집회). "
+              "① ③ ④ ⑤ = 이전 설정(속도 2025~, 경기만) - 최종 설정으로 재실행은 남은 과제. "
+              "실험마다 평가 이벤트 시간 범위가 달라 실험 사이의 숫자는 직접 비교하지 말고 같은 표 안에서만 비교하세요. "
+              "주의: ②⑥ 은 2023~2024 KBO·K리그 일정이 적재되기 전에 실행됨(그 기간 경기일을 평상일로 학습). "
+              "최종 Production 모델은 2023~ 경기 일정을 모두 넣어 다시 학습했습니다.", ""]
     lines += [f"- 데이터 출처: `{source}`  ·  시드: {seeds}  ·  epochs: {epochs}",
               "- 지표: 향후 1~6시간 전체 예보 시차의 통행속도 오차 (km/h). 평상 = 이벤트·공휴일이 아닌 시간, "
               "이벤트 = 등록된 이벤트 시작 전 ~ 종료 후", ""]
@@ -425,6 +483,21 @@ def write_summary(results: dict, seeds, epochs, source: str):
                   "- 출처를 더할수록 학습 때 '이벤트인 줄 모르던' 정체가 이벤트로 설명되는지를 봅니다. "
                   "평가 기준이 같으므로 행끼리 바로 비교할 수 있습니다.", ""]
 
+    if 6 in results:
+        agg = summarize(results[6].to_dict("records"), ["naive", "calendar", *EXPANSION])
+        lines += ["## 실험 ⑥ 데이터 확장 (평가 구간·이벤트 시간 동일)", "",
+                  fmt_table(agg, ["rmse_all", "rmse_normal", "rmse_event", "mae_event"], {**LABELS, **EXPANSION_LABELS}),
+                  "구간별 이벤트 시간 RMSE", "",
+                  fmt_table(agg, [f"rmse_event_{c}" for c in corridor_ids()], {**LABELS, **EXPANSION_LABELS}), ""]
+    final_path = os.path.join(OUT_DIR, "exp6_final.csv")
+    if os.path.exists(final_path):  # 최종 후보 검증: 평가 이벤트 시간에 TOPIS 통제 공지까지 포함 (위 표와 숫자 직접 비교 불가)
+        agg = summarize(pd.read_csv(final_path).to_dict("records"), ["final", "final-amatch", "final+notice"])
+        lines += ["### 실험 ⑥-2 최종 후보 검증 (집회 + 과거 2년 기준, 평가 이벤트 시간에 통제 공지 포함)", "",
+                  fmt_table(agg, ["rmse_all", "rmse_normal", "rmse_event", "mae_event"],
+                            {"final": "집회 + 과거 2년 + A매치 (채택)", "final-amatch": "A매치 제외",
+                             "final+notice": "+ TOPIS 통제 공지"}),
+                  "- A매치를 빼면 나빠지고(채택), TOPIS 통제 공지를 더해도 나빠짐(제외).", ""]
+
     path = os.path.join(OUT_DIR, "summary.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
@@ -433,7 +506,7 @@ def write_summary(results: dict, seeds, epochs, source: str):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--exp", nargs="+", type=int, default=[1, 2, 3, 4, 5], choices=[1, 2, 3, 4, 5])
+    ap.add_argument("--exp", nargs="+", type=int, default=[1, 2, 3, 4, 5], choices=[1, 2, 3, 4, 5, 6])
     ap.add_argument("--seeds", nargs="+", type=int, default=None)
     ap.add_argument("--epochs", type=int, default=None)
     ap.add_argument("--walk-days", type=int, default=75, help="실험 ③ walk-forward 기간")
@@ -449,9 +522,11 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
     if args.report_only:
-        results = {w: pd.read_csv(os.path.join(OUT_DIR, f"exp{w}.csv")) for w in args.exp
+        results = {w: pd.read_csv(os.path.join(OUT_DIR, f"exp{w}.csv")) for w in (1, 2, 3, 4, 5, 6)
                    if os.path.exists(os.path.join(OUT_DIR, f"exp{w}.csv"))}
-        write_summary(results, seeds, epochs, T.data_source())
+        # 저장된 결과를 합칠 때는 실험마다 시드 수가 다를 수 있으므로 표의 ± 유무로 확인
+        write_summary(results, "실험별 상이 (± 가 있는 표 = 시드 3개 평균 ± 표준편차)", args.epochs or epochs,
+                      T.data_source())
         return
 
     obs, events = T.load_data()
@@ -466,6 +541,8 @@ def main():
             results[4] = run_unit_comparison(runner, seeds)
     if 5 in args.exp:
         results[5] = run_source_comparison(obs, events, seeds, epochs)
+    if 6 in args.exp:
+        results[6] = run_data_expansion(obs, events, seeds, epochs)
     if 3 in args.exp:
         results[3] = run_drift_strategies(obs, events, seeds[:1] if args.quick else seeds, epochs,
                                           args.walk_days, args.period_days)

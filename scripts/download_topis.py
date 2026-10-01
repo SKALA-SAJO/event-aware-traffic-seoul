@@ -53,7 +53,7 @@ def main():
                 if pd.Period(year=year, month=month, freq="M") not in months:
                     continue
                 path = os.path.join(args.out, f"{kind}_{year}_{month:02d}.xlsx")
-                if os.path.exists(path):
+                if os.path.exists(path) or os.path.exists(path[:-5] + ".csv"):  # 팀 수집 CSV 가 있는 달도 건너뜀
                     print(f"[skip] {path}")
                     continue
                 download(row, board, path)
