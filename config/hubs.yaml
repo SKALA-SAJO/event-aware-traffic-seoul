@@ -1,0 +1,191 @@
+# 이벤트 인지형 교통 예측 서비스 설정
+#
+# 단위
+#   hub      : 이벤트가 일어나는 거점 (이벤트·집회·공연 일정은 거점에 붙음)
+#   corridor : 예측 단위 = 거점의 대표 도로 × 방향. 경기·공연 종료 후 귀가 정체는 한 방향에 몰리므로
+#              양방향을 평균하면 신호가 희석된다 → 방향별로 예측하고 소요시간도 방향별로 안내.
+#   link     : TOPIS 표준링크 (방향이 있는 도로 구간). corridor 속도 = 구간 길이 / Σ(링크 길이 / 링크 속도)
+#
+# 거점·corridor 는 이 파일에서만 관리합니다. corridor 목록이 바뀌면 모델 입력(one-hot) 차원이 바뀌므로
+# base 학습을 다시 해야 합니다. 학습 시점의 corridor 목록은 모델 메타데이터에 함께 저장됩니다.
+
+forecast:
+  lookback_hours: 24        # 입력: 최근 N시간
+  horizon_hours: 6          # 출력: 다음 k시간 통행속도
+  event_pre_hours: 3        # 이벤트 시작 전 영향 구간 (도착 차량)
+  event_post_hours: 3       # 이벤트 종료 후 영향 구간 (귀가 차량)
+  decay_tau_hours: 1.5      # 시간 감쇠 가중치의 시정수
+
+train:
+  epochs: 25
+  batch_size: 256
+  lr: 0.001
+  val_days: 21              # early stopping · 드리프트 기준 RMSE 산정 구간 (test 직전)
+  test_days: 56             # 평가 구간 (데이터 마지막 N일)
+  seeds: [42, 7, 2026]      # 실험 결과는 이 시드들의 평균으로 보고
+  feature_stage: full       # speed | volume | calendar | full  (실험 ① 결과로 결정)
+  event_mode: decay         # none | flag | scale | decay | text (실험 ② 결과로 결정)
+  # 이벤트 피처로 쓰는 출처 (실험 ⑤, 시드 3개): 경기만 1.611 ± 0.020 < 이벤트 없음 1.657 < +KOPIS 1.664~1.682.
+  # KOPIS 공연·서울시 문화행사는 수집·대시보드 표시·드리프트 판정 제외에는 쓰고, 피처에는 아직 넣지 않음
+  # (21개월간 거점별 수십 건뿐이고 경기장 콘서트·공원 축제가 한 규모 값에 섞여 일관된 효과를 배우지 못함).
+  event_sources: [kbo_schedule, kleague_schedule, csv, manual]   # csv·manual = 사람이 정리·등록한 집회 등
+
+gates:
+  # 배포 게이트 ① 평상 시간대 RMSE(km/h) 상한. null 이면 같은 평가 구간의 단순 예측법(지난주 같은 시각)
+  # 평상 RMSE 를 씁니다. scripts/run_experiments.py 가 권장값(평균 + 2σ)을 reports/ 에 출력합니다.
+  normal_rmse_max: null
+  # 배포 게이트 ② 이벤트 시간대 RMSE < 이벤트 정보 없는 모델(calendar 단계). 이벤트 시간이 이보다 적으면 건너뜀.
+  min_event_hours: 24
+
+drift:
+  window_hours: 72          # corridor 별 최근 N시간의 예측 오차로 판정
+  min_samples: 36           # 제외 후 남은 시간이 이보다 적으면 판정 보류
+  rmse_ratio_threshold: 1.5 # 최근 평상 RMSE / 기준 평상 RMSE
+  exclude_holidays: true    # 공휴일 = 예정된 이벤트 → 판정 제외
+  # 돌발 정보(AccInfo) 중 일시적인 것(사고·고장·낙하물·집회/행사 통제)은 판정에서 제외,
+  # 공사처럼 지속되는 구조 변화는 제외하지 않고 드리프트 원인으로 함께 기록합니다.
+  incident_buffer_hours: 1
+
+retrain:
+  # 드리프트 감지 시 동작. 실데이터 실험 ③(2026-07-18~09-30 walk-forward): 감지 시 재학습은 임계 1.5/2.0 모두
+  # 원인 모를 일시 정체 구간에 맞춰져 평상 RMSE 가 나빠짐(1.72/1.76) → 14일 주기 재학습(1.66)이 가장 좋음.
+  # alert: 알림만(원인 표기) + 주기적 fine-tuning  /  retrain: 감지 즉시 fine-tuning (시연용)
+  on_drift: alert
+  period_days: 14           # train_and_register.py --fine-tune 을 이 주기로 cron 실행
+  fine_tune_days: 14
+  eval_days: 1
+  recency_half_life_days: 3
+  epochs: 10
+  lr: 0.0003
+
+collection:
+  # 교통량 이력 정보(VolInfo)는 "이력" API 입니다. 최신 시간대가 언제 채워지는지는 키로 시험해 봐야 하므로
+  # 매 수집 때 직전 N시간을 다시 조회해 늦게 들어온 값을 채우고, 처음 값이 보인 지연을 기록합니다
+  # (scripts/collect_hourly.py --lag-report 로 확인 후 이 값을 조정하세요).
+  volume_backfill_hours: 6
+  # 드리프트 판정·예측 오차 계산 시 정답으로 쓸 수 있는 최소 지연 (속도는 실시간 → 0)
+  speed_lag_hours: 0
+  kopis_request_interval_sec: 0.2   # KOPIS: 초당 10회 이상 호출 시 서비스 중지
+  kopis_max_days: 31                # KOPIS 공연목록: 조회 기간 최대 31일, 페이지당 최대 100건
+  event_match_radius_km: 1.5        # 좌표 기반 거점 배정 반경 (KOPIS 공연시설·서울시 문화행사)
+  kopis_min_seats: 3000             # 이 객석 이상 공연장의 공연만 이벤트로 (소극장은 도로 교통에 영향 미미)
+
+hubs:
+  # corridor 정의: road(도로명) · direction(TOPIS 상행/하행) · anchor(기준 노드명) · span_m(기준 노드 앞뒤 거리)
+  #   → scripts/map_corridors.py 가 TOPIS 엑셀에서 링크 사슬과 같은 방향 교통량 지점을 골라
+  #     config/corridor_links.yaml 을 만듭니다 (name·short·links·volume_spots 는 그 파일 값이 우선).
+  #   sim_role 은 합성 데이터(data/synthetic.py)에서만 쓰는 방향별 이벤트 반응 가정입니다.
+  gwanghwamun:
+    name: 광화문·시청
+    enabled: true
+    center: [37.5700, 126.9769]       # 세종대로 광화문~시청 (위도, 경도)
+    event_types: [rally, festival, marathon]
+    police_stations: [종로, 남대문]
+    venues: [서울광장, 광화문광장, 세종대로]
+    kopis_districts: [1111, 1114]      # KOPIS 공연시설 검색 구 코드 (signgucodesub)
+    corridors:
+      gwanghwamun_up:
+        road: 세종대로
+        direction: 상행
+        anchor: 청계광장
+        short: 광화문→숭례문
+        sim_role: through
+        length_km: 1.6            # 링크 매핑이 없을 때(합성 데이터) 쓰는 근사 길이
+      gwanghwamun_down:
+        road: 세종대로
+        direction: 하행
+        anchor: 청계광장
+        short: 숭례문→광화문
+        sim_role: through
+        length_km: 1.6
+  yeouido:
+    name: 여의도
+    enabled: true
+    center: [37.5280, 126.9200]
+    event_types: [rally, festival, marathon]
+    police_stations: [영등포]
+    venues: [여의도공원, 여의도한강공원, 여의서로, 여의대로]   # 서울시 문화행사 PLACE 매칭 (도로에 붙은 야외 장소만)
+    kopis_districts: [1156]      # KOPIS 공연시설 검색 구 코드 (signgucodesub)
+    corridors:
+      yeouido_up:
+        road: 여의대로
+        direction: 상행
+        anchor: 여의도공원앞
+        short: 서울교→마포대교
+        sim_role: inbound
+        length_km: 2.0
+      yeouido_down:
+        road: 여의대로
+        direction: 하행
+        anchor: 여의도공원앞
+        short: 마포대교→서울교
+        sim_role: outbound
+        length_km: 2.0
+  jamsil:
+    name: 잠실
+    enabled: true
+    center: [37.5146, 127.0730]       # 잠실종합운동장
+    event_types: [sports, concert]
+    police_stations: [송파]
+    venues: [잠실야구장, 잠실종합운동장, 잠실실내체육관]
+    kopis_districts: [1171]      # KOPIS 공연시설 검색 구 코드 (signgucodesub)
+    corridors:
+      jamsil_up:
+        road: 올림픽로
+        direction: 상행
+        anchor: 종합운동장
+        short: 삼성→잠실
+        sim_role: inbound
+        length_km: 2.0
+      jamsil_down:
+        road: 올림픽로
+        direction: 하행
+        anchor: 종합운동장
+        short: 잠실→삼성
+        sim_role: outbound
+        length_km: 2.0
+  sangam:
+    name: 상암
+    enabled: true
+    center: [37.5683, 126.8972]       # 서울월드컵경기장
+    event_types: [sports, concert]
+    police_stations: [마포]
+    venues: [서울월드컵경기장]
+    kopis_districts: [1144]      # KOPIS 공연시설 검색 구 코드 (signgucodesub)
+    corridors:
+      sangam_up:
+        road: 월드컵로
+        direction: 상행
+        anchor: 월드컵경기장
+        short: DMC→합정
+        sim_role: inbound
+        length_km: 2.0
+      sangam_down:
+        road: 월드컵로
+        direction: 하행
+        anchor: 월드컵경기장
+        short: 합정→DMC
+        sim_role: outbound
+        length_km: 2.0
+  gocheok:
+    # 선택 거점 (기본 비활성): 잠실과 이벤트 유형이 겹침. 돔구장이라 우천취소가 없어 비교 소재로 활용 가능
+    name: 고척
+    enabled: false
+    center: [37.4982, 126.8671]
+    event_types: [sports, concert]
+    police_stations: [구로]
+    venues: [고척스카이돔]
+    kopis_districts: [1153]      # KOPIS 공연시설 검색 구 코드 (signgucodesub)
+    corridors:
+      gocheok_up:
+        road: 경인로
+        direction: 상행
+        anchor: 고척교
+        sim_role: inbound
+        length_km: 1.5
+      gocheok_down:
+        road: 경인로
+        direction: 하행
+        anchor: 고척교
+        sim_role: outbound
+        length_km: 1.5

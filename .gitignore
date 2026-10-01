@@ -1,0 +1,45 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# 런타임 산출물
+data/traffic.db
+data/traffic_synthetic.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/synthetic/
+data/raw/
+data/uploads/*
+!data/uploads/.gitkeep
+mlflow.db
+mlflow_synthetic.db
+mlruns/
+logs/*.log
+serving_app/models/*.keras
+serving_app/models/*.pkl
+serving_app/models/preprocess.json
+
+# API 키 (커밋·이미지에 포함 금지)
+.env
+.env.*

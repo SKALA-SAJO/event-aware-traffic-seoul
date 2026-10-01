@@ -1,0 +1,215 @@
+# 자동 생성 파일 - scripts/map_corridors.py 로 다시 만드세요 (직접 수정하지 말 것)
+gwanghwamun_up:
+  name: 세종대로 광화문→숭례문
+  short: 광화문→숭례문
+  links:
+  - link_id: '1000008300'
+    length_m: 519
+    st: 광화문
+    ed: 세종대로사거리
+  - link_id: '1000005100'
+    length_m: 110
+    st: 세종대로사거리
+    ed: 청계광장
+  - link_id: '1010018100'
+    length_m: 240
+    st: 청계광장
+    ed: 서울시의회
+  - link_id: '1010013700'
+    length_m: 230
+    st: 서울시의회
+    ed: 덕수궁
+  - link_id: '1010009900'
+    length_m: 104
+    st: 덕수궁
+    ed: 시청역
+  - link_id: '1010005900'
+    length_m: 401
+    st: 시청역
+    ed: 숭례문
+  volume_spots:
+  - spot: A-17
+    io_type: 1
+gwanghwamun_down:
+  name: 세종대로 숭례문→광화문
+  short: 숭례문→광화문
+  links:
+  - link_id: '1010006000'
+    length_m: 401
+    st: 숭례문
+    ed: 시청역
+  - link_id: '1010010000'
+    length_m: 108
+    st: 시청역
+    ed: 덕수궁
+  - link_id: '1010013800'
+    length_m: 235
+    st: 덕수궁
+    ed: 서울시의회
+  - link_id: '1010018200'
+    length_m: 240
+    st: 서울시의회
+    ed: 청계광장
+  - link_id: '1000005200'
+    length_m: 108
+    st: 청계광장
+    ed: 세종대로사거리
+  - link_id: '1000008400'
+    length_m: 515
+    st: 세종대로사거리
+    ed: 광화문
+  volume_spots:
+  - spot: A-17
+    io_type: 2
+yeouido_up:
+  name: 여의대로 여의도(서울교)→마포대교남단
+  short: 서울교→마포대교
+  links:
+  - link_id: '1180001800'
+    length_m: 476
+    st: 여의도(서울교)
+    ed: 여의도공원앞
+  - link_id: '1180002000'
+    length_m: 485
+    st: 여의도공원앞
+    ed: 여의도환승센터
+  - link_id: '1180002400'
+    length_m: 394
+    st: 여의도환승센터
+    ed: 마포대교남단
+  volume_spots: []
+yeouido_down:
+  name: 여의대로 마포대교남단→여의도(서울교)
+  short: 마포대교→서울교
+  links:
+  - link_id: '1180002300'
+    length_m: 394
+    st: 마포대교남단
+    ed: 여의도환승센터
+  - link_id: '1180001900'
+    length_m: 485
+    st: 여의도환승센터
+    ed: 여의도공원앞
+  - link_id: '1180001700'
+    length_m: 476
+    st: 여의도공원앞
+    ed: 여의도(서울교)
+  volume_spots: []
+jamsil_up:
+  name: 올림픽로 서울종합운동장→잠실3사거리
+  short: 삼성→잠실
+  links:
+  - link_id: '1230024600'
+    length_m: 695
+    st: 서울종합운동장
+    ed: 종합운동장
+  - link_id: '1230025100'
+    length_m: 641
+    st: 종합운동장
+    ed: 잠실새내역
+  - link_id: '1230025000'
+    length_m: 621
+    st: 잠실새내역
+    ed: 잠실3사거리
+  volume_spots: []
+jamsil_down:
+  name: 올림픽로 잠실3사거리→서울종합운동장
+  short: 잠실→삼성
+  links:
+  - link_id: '1230024900'
+    length_m: 619
+    st: 잠실3사거리
+    ed: 잠실새내역
+  - link_id: '1230025200'
+    length_m: 642
+    st: 잠실새내역
+    ed: 종합운동장
+  - link_id: '1230024500'
+    length_m: 695
+    st: 종합운동장
+    ed: 서울종합운동장
+  volume_spots: []
+sangam_up:
+  name: 월드컵로 디지털미디어시티입구→성산1교
+  short: DMC→합정
+  links:
+  - link_id: '1130024500'
+    length_m: 195
+    st: 디지털미디어시티입구
+    ed: 월드컵파크3단지
+  - link_id: '1130023300'
+    length_m: 767
+    st: 월드컵파크3단지
+    ed: 월드컵경기장
+  - link_id: '1130006100'
+    length_m: 531
+    st: 월드컵경기장
+    ed: 월드컵경기장삼거리
+  - link_id: '1130021900'
+    length_m: 222
+    st: 월드컵경기장삼거리
+    ed: 마포구청
+  - link_id: '1130020900'
+    length_m: 235
+    st: 마포구청
+    ed: 성산1교
+  volume_spots: []
+sangam_down:
+  name: 월드컵로 성산1교→디지털미디어시티입구
+  short: 합정→DMC
+  links:
+  - link_id: '1130021000'
+    length_m: 237
+    st: 성산1교
+    ed: 마포구청
+  - link_id: '1130022000'
+    length_m: 226
+    st: 마포구청
+    ed: 월드컵경기장삼거리
+  - link_id: '1130006200'
+    length_m: 523
+    st: 월드컵경기장삼거리
+    ed: 월드컵경기장
+  - link_id: '1130023400'
+    length_m: 765
+    st: 월드컵경기장
+    ed: 월드컵파크3단지
+  - link_id: '1130024600'
+    length_m: 198
+    st: 월드컵파크3단지
+    ed: 디지털미디어시티입구
+  volume_spots: []
+gocheok_up:
+  name: 경인로 구로소방서→구로역
+  short: →구로역
+  links:
+  - link_id: '1160002200'
+    length_m: 398
+    st: 구로소방서
+    ed: 동양미래대학
+  - link_id: '1160001900'
+    length_m: 277
+    st: 동양미래대학
+    ed: 고척교
+  - link_id: '1160002400'
+    length_m: 860
+    st: 고척교
+    ed: 구로역
+  volume_spots: []
+gocheok_down:
+  name: 경인로 구로역→구로소방서
+  short: →구로소방서
+  links:
+  - link_id: '1160002300'
+    length_m: 852
+    st: 구로역
+    ed: 고척교
+  - link_id: '1160002000'
+    length_m: 277
+    st: 고척교
+    ed: 동양미래대학
+  - link_id: '1160002100'
+    length_m: 410
+    st: 동양미래대학
+    ed: 구로소방서
+  volume_spots: []

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>거점 교통 예측</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --surface-2: #f3f2ee;
+    --border: rgba(11, 11, 11, 0.10);
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --series-1: #2a78d6;
+    --event-band: rgba(235, 104, 52, 0.12);
+    --event-ink: #b14a1f;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --good-text: #006300;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", Pretendard, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --surface-2: #222221; --border: rgba(255, 255, 255, 0.10);
+      --text: #ffffff; --text-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+      --series-1: #3987e5; --event-band: rgba(217, 89, 38, 0.18); --event-ink: #ec835a; --good-text: #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #222221; --border: rgba(255, 255, 255, 0.10);
+    --text: #ffffff; --text-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --series-1: #3987e5; --event-band: rgba(217, 89, 38, 0.18); --event-ink: #ec835a; --good-text: #0ca30c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text); font-family: var(--sans); overflow-x: hidden; }
+  @media (max-width: 520px) { .page { padding: 12px 16px; } .card { padding: 12px; } .hub-card { padding: 10px; } }
+
+  .topnav { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; position: sticky; top: 0; z-index: 10; }
+  .brand .title { font-weight: 700; font-size: 1rem; }
+  .brand .subtitle { font-size: 0.74rem; color: var(--text-2); }
+  .nav-right { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-2); flex-wrap: wrap; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 0.74rem;
+    font-weight: 600; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.good { background: var(--good); } .dot.warning { background: var(--warning); } .dot.critical { background: var(--critical); }
+  .dot.idle { background: var(--muted); }
+
+  .page { max-width: 1100px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+  .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .section-head h2 { margin: 0 0 3px; font-size: 1rem; }
+  .section-head p { margin: 0; color: var(--text-2); font-size: 0.8rem; line-height: 1.5; }
+
+  .btn { border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    background: var(--surface-2); color: var(--text); font-family: inherit; }
+  .btn.primary { background: var(--series-1); color: #fff; border-color: transparent; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  input, select, textarea { font-family: inherit; font-size: 0.82rem; padding: 6px 8px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text); max-width: 100%; }
+
+  /* ---------- forecast grid ---------- */
+  .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .hub-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--surface); min-width: 0; }
+  .hub-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .hub-name { font-weight: 700; font-size: 0.95rem; }
+  .hub-meta { font-size: 0.72rem; color: var(--muted); }
+  .kpi { margin: 8px 0 4px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .kpi .value { font-size: 1.6rem; font-weight: 700; }
+  .kpi .label { font-size: 0.76rem; color: var(--text-2); }
+  .events-line { font-size: 0.74rem; color: var(--event-ink); min-height: 1.1em; margin-bottom: 4px; }
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .legend { display: flex; gap: 14px; font-size: 0.72rem; color: var(--text-2); margin-top: 4px; flex-wrap: wrap; }
+  .legend .sw { display: inline-block; width: 16px; height: 0; vertical-align: middle; margin-right: 5px; border-top: 2px solid var(--series-1); }
+  .legend .sw.usual { border-top: 2px dashed var(--muted); }
+  .legend .sw.actual { border-top: 2px solid var(--text); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .issue-ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .issue-ctl input { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+  .legend .sw.band { height: 10px; border: none; background: var(--event-band); }
+  .tooltip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 8px; font-size: 0.74rem; color: var(--text); box-shadow: 0 4px 14px rgba(0,0,0,0.12); white-space: nowrap; display: none; z-index: 2; }
+  .tooltip .t { color: var(--text-2); margin-bottom: 2px; }
+  details { margin-top: 6px; font-size: 0.76rem; color: var(--text-2); }
+  details summary { cursor: pointer; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th { text-align: left; color: var(--text-2); font-weight: 600; font-size: 0.72rem; padding: 6px 8px; border-bottom: 1px solid var(--axis); }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  .table-scroll { overflow-x: auto; }
+  .empty { color: var(--muted); font-size: 0.8rem; padding: 14px 4px; text-align: center; }
+
+  .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .form-grid label { font-size: 0.72rem; color: var(--text-2); display: flex; flex-direction: column; gap: 3px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+
+  .tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); flex-wrap: wrap; }
+  .tab { border: none; background: transparent; color: var(--text-2); font: inherit; font-size: 0.74rem; font-weight: 600; padding: 4px 9px; border-radius: 6px; cursor: pointer; }
+  .tab[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+  .dir-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; }
+  .dir-kpi { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+  .dir-kpi .v { font-size: 1.25rem; font-weight: 700; }
+  .dir-kpi .l { font-size: 0.7rem; color: var(--text-2); line-height: 1.35; }
+  .badge { font-size: 0.68rem; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); white-space: nowrap; }
+  .note { font-size: 0.72rem; color: var(--text-2); margin-top: 6px; }
+  .pipeline { display: flex; overflow-x: auto; }
+  .stage { flex: 1; min-width: 120px; padding: 8px 10px; border-left: 1px solid var(--grid); }
+  .stage:first-child { border-left: none; }
+  .stage .name { font-size: 0.8rem; font-weight: 700; }
+  .stage .desc { font-size: 0.7rem; color: var(--text-2); margin: 2px 0 6px; line-height: 1.4; }
+  .stage .st { font-size: 0.72rem; display: flex; align-items: center; gap: 5px; color: var(--text-2); }
+
+  .result { margin-top: 10px; padding: 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--mono); font-size: 0.74rem;
+    white-space: pre-wrap; word-break: break-word; max-height: 280px; overflow-y: auto; display: none; }
+  .result.show { display: block; }
+  code { font-family: var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+  footer { color: var(--muted); font-size: 0.74rem; text-align: center; margin: 20px 0 10px; }
+  @media (max-width: 520px) { .form-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <div class="brand">
+    <div class="title">서울 이벤트 거점 교통 예측</div>
+    <div class="subtitle">공연·경기·집회 일정을 반영한 향후 통행속도 · 평소 대비 추가 소요시간</div>
+  </div>
+  <div class="nav-right">
+    <span class="pill" id="health-pill"><span class="dot idle"></span><span>확인 중</span></span>
+    <span class="pill" id="version-pill">모델 -</span>
+    <button class="btn" id="theme-btn" type="button" aria-label="테마 전환">테마</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- ===================== 예측 ===================== -->
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <h2>거점·방향별 향후 통행속도</h2>
+        <p>방향(corridor)별 예측입니다. 발행 시각을 비우면 마지막 관측 시각 기준이고, 과거 시각을 고르면 그 시점에 알 수 있던 정보만으로 예측을 재현해 실측과 비교합니다. 음영은 그 시점까지 공개된 이벤트의 영향 시간대입니다.</p>
+      </div>
+      <div class="issue-ctl">
+        <label for="issued-at" class="sr-only">발행 시각</label>
+        <input type="datetime-local" id="issued-at" step="3600" aria-label="발행 시각 (비우면 최신)">
+        <button class="btn" id="preset-game" type="button">최근 경기 3시간 전</button>
+        <button class="btn primary" id="predict-btn" type="button">예측</button>
+      </div>
+    </div>
+    <div class="hub-grid" id="hub-grid"><div class="empty">예측을 불러오는 중…</div></div>
+  </section>
+
+  <div class="two-col">
+    <!-- ===================== 이벤트 등록 ===================== -->
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>이벤트 일정 등록</h2>
+          <p>공개된 일정을 등록하면 해당 거점·시간대 예측이 갱신됩니다. 공지 원문을 넣으면 행진·차로 통제 여부를 추출합니다.</p>
+        </div>
+      </div>
+      <form id="event-form" class="form-grid">
+        <label>거점<select name="hub" id="ev-hub"></select></label>
+        <label>유형
+          <select name="type">
+            <option value="rally">집회</option><option value="concert">공연</option><option value="sports">경기</option>
+            <option value="festival">축제</option><option value="marathon">마라톤</option><option value="other">기타</option>
+          </select>
+        </label>
+        <label class="full">제목<input name="title" required placeholder="예: OO 집회 / KBO 잠실 LG-두산" /></label>
+        <label>시작<input name="start" type="datetime-local" required /></label>
+        <label>종료<input name="end" type="datetime-local" required /></label>
+        <label>규모(신고·수용 인원)<input name="expected_size" type="number" min="0" placeholder="선택" /></label>
+        <label>공개 시각<input name="announced_at" type="datetime-local" /></label>
+        <label class="full">공지 원문<textarea name="description" rows="2" placeholder="예: 국회 → 여의도공원 행진, 여의대로 4개 차로 이용"></textarea></label>
+      </form>
+      <div class="row">
+        <button class="btn primary" id="event-submit" type="button">등록</button>
+        <input type="file" id="event-file" accept=".csv" />
+        <button class="btn" id="event-upload" type="button">CSV 일괄 등록</button>
+      </div>
+      <div class="result" id="event-result"></div>
+    </section>
+
+    <!-- ===================== 이벤트 목록 ===================== -->
+    <section class="card">
+      <div class="section-head">
+        <div><h2>이벤트 일정</h2><p>다가오는 일정(마지막 관측 이후 7일) · 자동 수집 중 시각을 확정하지 못한 검토 대기 일정</p></div>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" aria-selected="true" data-evtab="upcoming" type="button">다가오는 일정</button>
+          <button class="tab" role="tab" aria-selected="false" data-evtab="review" type="button">검토 대기</button>
+        </div>
+      </div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>거점</th><th>일정</th><th>시작–종료</th><th>규모</th><th>속성</th><th></th></tr></thead>
+        <tbody id="events-body"><tr><td colspan="6" class="empty">-</td></tr></tbody>
+      </table></div>
+      <div class="note" id="events-note"></div>
+    </section>
+  </div>
+
+  <!-- ===================== 드리프트 ===================== -->
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <h2>드리프트 모니터링</h2>
+        <p>방향별 최근 72시간 예측 오차(현재 모델 버전). 등록된 이벤트·공휴일과 일시적 돌발(사고 등) 시간은 판정에서 제외하고, 공사처럼 지속되는 예정 외 변화만 재학습 대상으로 봅니다.</p>
+      </div>
+      <button class="btn" id="drift-refresh" type="button">새로고침</button>
+    </div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>방향</th><th>상태</th><th>평상 RMSE</th><th>기준 RMSE</th><th>비율 / 임계</th><th>판정 시간</th><th>제외(이벤트·공휴일 / 돌발)</th><th>진행 중 공사</th></tr></thead>
+      <tbody id="drift-body"><tr><td colspan="8" class="empty">-</td></tr></tbody>
+    </table></div>
+
+    <div style="margin-top:14px">
+      <div class="section-head" style="margin-bottom:6px"><div><h2 style="font-size:0.9rem">최근 돌발 정보</h2>
+        <p>서울시 실시간 돌발 정보(corridor 링크에 매핑된 것). 사고·통제는 판정 제외, 공사는 드리프트 원인으로 표시.</p></div></div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>방향</th><th>유형</th><th>내용</th><th>발생</th><th>해제(예정)</th></tr></thead>
+        <tbody id="incident-body"><tr><td colspan="5" class="empty">-</td></tr></tbody>
+      </table></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="section-head" style="margin-bottom:6px"><div><h2 style="font-size:0.9rem">재학습 파이프라인 (최근 실행)</h2>
+        <p><code>python scripts/simulate_drift.py</code> 로 정상 → 알려진 이벤트 → 도로 공사 시나리오를 주입해 보세요.</p></div></div>
+      <div class="pipeline" id="pipeline"></div>
+    </div>
+  </section>
+
+  <div class="two-col">
+    <!-- ===================== 데이터 ===================== -->
+    <section class="card">
+      <div class="section-head">
+        <div><h2>관측 데이터</h2><p>CSV(corridor, datetime, speed, volume) 업로드. TOPIS 엑셀·실시간 API 는 링크·지점 원천으로 쌓은 뒤 방향별로 집계됩니다.</p></div>
+      </div>
+      <div class="row" style="margin-top:0">
+        <input type="file" id="data-file" accept=".csv" />
+        <button class="btn primary" id="data-upload" type="button">업로드</button>
+      </div>
+      <div class="table-scroll" style="margin-top:10px"><table>
+        <thead><tr><th>방향</th><th>시간 수</th><th>기간</th><th>교통량 결측</th><th>출처</th></tr></thead>
+        <tbody id="data-body"><tr><td colspan="5" class="empty">-</td></tr></tbody>
+      </table></div>
+      <div class="note" id="lag-note"></div>
+      <div class="result" id="data-result"></div>
+    </section>
+
+    <!-- ===================== 로그 ===================== -->
+    <section class="card">
+      <div class="section-head">
+        <div><h2>AIOps 로그</h2><p><code>logs/aiops.log</code> - 드리프트 감지 → 재학습 → 게이트 → 승격 기록</p></div>
+        <button class="btn" id="logs-refresh" type="button">새로고침</button>
+      </div>
+      <div class="result show" id="log-content" style="max-height:340px">-</div>
+    </section>
+  </div>
+
+  <footer>FastAPI · MLflow · LSTM — API 문서는 <a href="/docs" style="color:inherit">/docs</a></footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const TYPE_KO = { rally: "집회", concert: "공연", sports: "경기", festival: "축제", marathon: "마라톤", other: "기타" };
+let HUBS = {};
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body));
+  return body;
+}
+
+/* ---------- theme ---------- */
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("theme"); } catch (e) {}
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("#theme-btn").addEventListener("click", () => {
+    const cur = document.documentElement.dataset.theme
+      || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("theme", next); } catch (e) {}
+  });
+})();
+
+/* ---------- health ---------- */
+async function loadHealth() {
+  try {
+    const h = await api("/health");
+    $("#health-pill").innerHTML = `<span class="dot good"></span><span>서버 정상</span>`;
+    $("#version-pill").textContent = `모델 ${h.model_version ?? "(미로딩)"} · ${h.model_source}`;
+  } catch (e) {
+    $("#health-pill").innerHTML = `<span class="dot critical"></span><span>서버 오류</span>`;
+  }
+}
+
+/* ---------- forecast chart ---------- */
+function hourLabel(ts) { return ts.slice(11, 16); }
+
+function renderChart(container, fc) {
+  const pts = fc.forecast;
+  const W = 340, H = 150, m = { l: 34, r: 12, t: 10, b: 22 };
+  const vals = pts.flatMap((p) => [p.speed_kmh, p.usual_speed_kmh, p.actual_speed_kmh]).filter((v) => v != null);
+  const lo = Math.max(0, Math.floor((Math.min(...vals) - 4) / 5) * 5), hi = Math.ceil((Math.max(...vals) + 4) / 5) * 5;
+  const x = (i) => m.l + (i / (pts.length - 1)) * (W - m.l - m.r);
+  const y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+  const step = (W - m.l - m.r) / (pts.length - 1);
+  const ticks = []; for (let v = lo; v <= hi; v += Math.max(5, Math.round((hi - lo) / 4 / 5) * 5)) ticks.push(v);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(fc.name)} 향후 ${pts.length}시간 예상 속도">`;
+  pts.forEach((p, i) => {
+    if (p.events.length) svg += `<rect x="${x(i) - step / 2}" y="${m.t}" width="${step}" height="${H - m.t - m.b}" fill="var(--event-band)"/>`;
+  });
+  ticks.forEach((v) => {
+    svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+    svg += `<text x="${m.l - 6}" y="${y(v) + 3}" text-anchor="end" font-size="10" fill="var(--muted)">${v}</text>`;
+  });
+  pts.forEach((p, i) => svg += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)">${hourLabel(p.target_ts)}</text>`);
+  const usual = pts.map((p, i) => p.usual_speed_kmh != null ? `${x(i)},${y(p.usual_speed_kmh)}` : null).filter(Boolean);
+  if (usual.length > 1) svg += `<polyline points="${usual.join(" ")}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 3"/>`;
+  const act = pts.map((p, i) => p.actual_speed_kmh != null ? `${x(i)},${y(p.actual_speed_kmh)}` : null).filter(Boolean);
+  if (act.length > 1) svg += `<polyline points="${act.join(" ")}" fill="none" stroke="var(--text)" stroke-width="2" stroke-linejoin="round"/>`;
+  svg += `<polyline points="${pts.map((p, i) => `${x(i)},${y(p.speed_kmh)}`).join(" ")}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round"/>`;
+  pts.forEach((p, i) => svg += `<circle cx="${x(i)}" cy="${y(p.speed_kmh)}" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>`);
+  svg += `<line class="xh" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--axis)" stroke-width="1" visibility="hidden"/>`;
+  svg += `<rect class="hit" x="${m.l - step / 2}" y="0" width="${W - m.l - m.r + step}" height="${H}" fill="transparent"/></svg>`;
+  container.innerHTML = svg + `<div class="tooltip"></div>`;
+
+  const el = container.querySelector("svg"), tip = container.querySelector(".tooltip"), xh = el.querySelector(".xh");
+  el.querySelector(".hit").addEventListener("mousemove", (ev) => {
+    const r = el.getBoundingClientRect();
+    const sx = (ev.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round((sx - m.l) / step)));
+    const p = pts[i];
+    xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("visibility", "visible");
+    tip.innerHTML = `<div class="t">${esc(p.target_ts.slice(5, 16))} (+${p.horizon}h)</div>
+      예상 <b>${p.speed_kmh}</b> km/h · 평소 ${p.usual_speed_kmh ?? "-"} km/h${p.actual_speed_kmh != null ? ` · 실측 <b>${p.actual_speed_kmh}</b>` : ""}<br>
+      소요 ${p.travel_time_min}분 (${p.extra_min == null ? "-" : (p.extra_min >= 0 ? "+" : "") + p.extra_min + "분"})
+      ${p.events.length ? `<br><span style="color:var(--event-ink)">${esc(p.events.join(", "))}</span>` : ""}`;
+    tip.style.display = "block";
+    const left = (x(i) / W) * r.width;
+    tip.style.left = Math.min(left + 10, r.width - tip.offsetWidth) + "px";
+    tip.style.top = "0px";
+  });
+  el.querySelector(".hit").addEventListener("mouseleave", () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); });
+}
+
+const ROLE_KO = { inbound: "행사장 방향", outbound: "귀가 방향", through: "" };
+let CORR = {};  // corridor id → {name, hub, role}
+
+function fmtExtra(v) { return v == null ? "-" : (v >= 0 ? "+" : "") + v.toFixed(1) + "분"; }
+function worstPoint(pts) { return pts.reduce((a, p) => (p.extra_min ?? -1e9) > (a.extra_min ?? -1e9) ? p : a, pts[0]); }
+
+function renderHub(hubName, fcs) {
+  const card = document.createElement("div");
+  card.className = "hub-card";
+  const kpis = fcs.map((fc) => {
+    const w = worstPoint(fc.forecast);
+    const role = ROLE_KO[CORR[fc.corridor]?.role] || "";
+    return `<div class="dir-kpi"><div class="v">${fmtExtra(w.extra_min)}</div>
+      <div class="l">${esc(fc.corridor_name)}${role ? ` <span class="badge">${role}</span>` : ""}<br>최대 추가 소요 (${esc(w.target_ts.slice(11, 16))})</div></div>`;
+  }).join("");
+  const evNames = [...new Set(fcs.flatMap((fc) => fc.forecast.flatMap((p) => p.events)))];
+  card.innerHTML = `
+    <div class="hub-top"><span class="hub-name">${esc(hubName)}</span><span class="hub-meta">발행 ${esc(fcs[0].issued_at.slice(5, 16))}</span></div>
+    <div class="dir-kpis">${kpis}</div>
+    <div class="events-line">${evNames.length ? "이벤트: " + esc(evNames.join(", ")) : ""}</div>
+    <div class="tabs" role="tablist">${fcs.map((fc, i) => `<button class="tab" role="tab" type="button" data-i="${i}" aria-selected="${i === 0}">${esc(CORR[fc.corridor]?.short ?? fc.corridor_name)}</button>`).join("")}</div>
+    <div class="chart-wrap" style="margin-top:6px"></div>
+    <div class="legend"><span><span class="sw"></span>예상 속도</span><span><span class="sw usual"></span>평소(최근 8주 같은 요일·시각)</span>${fcs.some((fc) => fc.forecast.some((p) => p.actual_speed_kmh != null)) ? '<span><span class="sw actual"></span>실측</span>' : ""}${evNames.length ? '<span><span class="sw band"></span>이벤트 영향 시간</span>' : ""}</div>
+    <details><summary>표로 보기</summary><div class="table-scroll"><table>
+      <thead><tr><th>방향</th><th>시각</th><th>예상 km/h</th><th>실측 km/h</th><th>평소 km/h</th><th>소요(분)</th><th>추가(분)</th></tr></thead>
+      <tbody>${fcs.flatMap((fc) => fc.forecast.map((p) => `<tr><td>${esc(fc.corridor_name)}</td><td>${esc(p.target_ts.slice(5, 16))}</td><td>${p.speed_kmh}</td><td>${p.actual_speed_kmh ?? "-"}</td><td>${p.usual_speed_kmh ?? "-"}</td><td>${p.travel_time_min}</td><td>${p.extra_min ?? "-"}</td></tr>`)).join("")}</tbody>
+    </table></div></details>`;
+  const wrap = card.querySelector(".chart-wrap");
+  const show = (i) => {
+    card.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.i == i)));
+    renderChart(wrap, { ...fcs[i], name: `${hubName} ${fcs[i].corridor_name}` });
+  };
+  card.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => show(Number(t.dataset.i))));
+  show(0);
+  return card;
+}
+
+async function loadForecast() {
+  const grid = $("#hub-grid");
+  $("#predict-btn").disabled = true;
+  try {
+    const at = $("#issued-at").value;
+    // 과거 재현 예측은 드리프트 모니터링용 예측 기록에 남기지 않음
+    const body = at ? { issued_at: at.replace("T", " ") + ":00", log: false } : { log: true };
+    const res = await api("/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const byHub = new Map();
+    res.forecasts.forEach((fc) => { if (!byHub.has(fc.hub)) byHub.set(fc.hub, []); byHub.get(fc.hub).push(fc); });
+    grid.innerHTML = "";
+    byHub.forEach((fcs) => grid.appendChild(renderHub(fcs[0].name, fcs)));
+    loadHealth();
+  } catch (e) {
+    grid.innerHTML = `<div class="empty">예측 실패: ${esc(e.message)}<br>데이터 적재와 모델 학습(<code>python serving_app/train_and_register.py</code>)을 먼저 확인하세요.</div>`;
+  } finally { $("#predict-btn").disabled = false; }
+}
+
+/* ---------- events ---------- */
+async function loadHubs() {
+  const list = await api("/hubs");
+  HUBS = Object.fromEntries(list.map((h) => [h.id, h]));
+  CORR = Object.fromEntries(list.flatMap((h) => h.corridors.map((c) => [c.id, { ...c, hub: h.id, hubName: h.name }])));
+  $("#ev-hub").innerHTML = list.filter((h) => h.enabled).map((h) => `<option value="${h.id}">${esc(h.name)}</option>`).join("");
+}
+
+let EV_TAB = "upcoming";
+document.querySelectorAll("[data-evtab]").forEach((b) => b.addEventListener("click", () => {
+  EV_TAB = b.dataset.evtab;
+  document.querySelectorAll("[data-evtab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  loadEvents();
+}));
+
+async function setStatus(id, status) {
+  await api(`/events/${id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+  loadEvents(); loadForecast();
+}
+
+async function loadEvents() {
+  try {
+    let evs;
+    if (EV_TAB === "review") {
+      evs = await api(`/events?status=review`);
+      $("#events-note").textContent = "자동 수집 중 회차 시각을 확정하지 못한 일정입니다. 예측에 쓰이지 않으며, 시각을 확인한 뒤 확정하세요.";
+    } else {
+      // corridor 마다 마지막 관측 시각이 다를 수 있으므로 가장 이른 시각부터 7일
+      const st = await api("/data/status");
+      const ends = st.corridors.map((h) => h.end).sort();
+      const from = ends.length ? ends[0].replace(" ", "T") : new Date().toISOString().slice(0, 19);
+      const to = new Date(new Date(from).getTime() + 7 * 864e5).toISOString().slice(0, 19);
+      evs = (await api(`/events?start=${from}&end=${to}`)).filter((e) => e.status !== "review" && HUBS[e.hub]?.enabled !== false);
+      $("#events-note").textContent = "취소는 삭제 대신 '취소'로 기록합니다 - 취소 공지 전 예측·학습에서는 예정으로 보였던 사실을 남기기 위함.";
+    }
+    $("#events-body").innerHTML = evs.length ? evs.map((e) => {
+      const tags = [e.march ? "행진" : "", e.lane_control ? "차로통제" : "", e.status === "cancelled" ? "취소" : "",
+        e.end_estimated ? "종료 추정" : ""].filter(Boolean).map((t) => `<span class="badge">${t}</span>`).join(" ");
+      const actions = e.status === "review"
+        ? `<button class="btn" data-st="scheduled" data-id="${e.id}" type="button">확정</button>`
+        : e.status === "cancelled" ? "" : `<button class="btn" data-st="cancelled" data-id="${e.id}" type="button">취소</button>`;
+      return `<tr><td>${esc(HUBS[e.hub]?.name ?? e.hub)}</td><td>${esc(TYPE_KO[e.type] ?? e.type)} · ${esc(e.title)}<br><span class="hub-meta">${esc(e.source ?? "")}</span></td>
+        <td>${esc(e.start.slice(5, 16))}–${esc(e.end.slice(11, 16))}</td><td>${e.expected_size ? Number(e.expected_size).toLocaleString() : "-"}</td>
+        <td>${tags || "-"}</td><td style="white-space:nowrap">${actions} <button class="btn" data-del="${e.id}" type="button">삭제</button></td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="empty">${EV_TAB === "review" ? "검토 대기 일정이 없습니다" : "예정된 이벤트가 없습니다"}</td></tr>`;
+    document.querySelectorAll("[data-st]").forEach((b) => b.addEventListener("click", () => setStatus(b.dataset.id, b.dataset.st)));
+    document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
+      await api(`/events/${b.dataset.del}`, { method: "DELETE" }); loadEvents(); loadForecast();
+    }));
+  } catch (e) { $("#events-body").innerHTML = `<tr><td colspan="6" class="empty">${esc(e.message)}</td></tr>`; }
+}
+
+function showResult(id, text, ok = true) {
+  const el = $(id); el.textContent = text; el.classList.add("show"); el.style.color = ok ? "" : "var(--critical)";
+}
+
+$("#event-submit").addEventListener("click", async () => {
+  const f = new FormData($("#event-form"));
+  const body = Object.fromEntries([...f.entries()].filter(([, v]) => v !== ""));
+  if (body.expected_size) body.expected_size = Number(body.expected_size);
+  try {
+    const ev = await api("/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    showResult("#event-result", `등록됨 #${ev.id} ${ev.title} (행진=${ev.march}, 차로통제=${ev.lane_control})`);
+    loadEvents(); loadForecast();
+  } catch (e) { showResult("#event-result", e.message, false); }
+});
+
+$("#event-upload").addEventListener("click", async () => {
+  const file = $("#event-file").files[0];
+  if (!file) return showResult("#event-result", "CSV 파일을 선택하세요", false);
+  const fd = new FormData(); fd.append("file", file);
+  try { const r = await api("/events/upload", { method: "POST", body: fd }); showResult("#event-result", `${r.registered}건 등록`); loadEvents(); loadForecast(); }
+  catch (e) { showResult("#event-result", e.message, false); }
+});
+
+/* ---------- drift ---------- */
+const STATUS = {
+  ok: ["good", "정상"], drift: ["critical", "드리프트"], insufficient_data: ["idle", "판정 보류"],
+};
+const fmt = (v, d = 2) => v == null ? "-" : Number(v).toFixed(d);
+
+const corrName = (id) => CORR[id] ? `${CORR[id].hubName} ${CORR[id].name}` : id;
+
+async function loadDrift() {
+  try {
+    const rows = await api("/monitoring/drift");
+    $("#drift-body").innerHTML = rows.map((r) => {
+      const [cls, label] = STATUS[r.status] ?? ["idle", r.status];
+      return `<tr><td>${esc(corrName(r.corridor))}</td>
+        <td><span class="pill"><span class="dot ${cls}"></span>${label}</span></td>
+        <td>${fmt(r.rmse)}</td><td>${fmt(r.reference_rmse)}</td><td>${fmt(r.ratio)} / ${r.threshold ?? "-"}</td>
+        <td>${r.n_hours ?? 0}h</td><td>${r.excluded_hours ?? 0}h / ${r.excluded_incident_hours ?? 0}h</td>
+        <td>${(r.constructions ?? []).map((c) => esc(c)).join("<br>") || "-"}</td></tr>`;
+    }).join("");
+  } catch (e) { $("#drift-body").innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`; }
+}
+
+const INC_KO = { accident: "사고", construction: "공사", control: "통제", event: "행사·집회", other: "기타" };
+async function loadIncidents() {
+  try {
+    const st = await api("/data/status");
+    const ends = st.corridors.map((c) => c.end).sort();
+    const until = ends.length ? ends[0].replace(" ", "T") : new Date().toISOString().slice(0, 19);
+    const since = new Date(new Date(until).getTime() - 7 * 864e5).toISOString().slice(0, 19);
+    const rows = (await api(`/incidents?start=${since}&end=${until}&limit=30`)).reverse();
+    $("#incident-body").innerHTML = rows.length ? rows.map((r) => `<tr><td>${esc(corrName(r.corridor) || r.hub)}</td>
+      <td><span class="badge">${INC_KO[r.category] ?? r.category}</span></td><td>${esc(r.info ?? "")}</td>
+      <td>${esc((r.start ?? "").slice(5, 16))}</td><td>${esc((r.last_seen ?? r.expected_end ?? "").slice(5, 16))}</td></tr>`).join("")
+      : `<tr><td colspan="5" class="empty">최근 7일 돌발 정보가 없습니다</td></tr>`;
+  } catch (e) { $("#incident-body").innerHTML = `<tr><td colspan="5" class="empty">${esc(e.message)}</td></tr>`; }
+}
+
+/* ---------- pipeline + logs ---------- */
+const STAGES = [
+  ["감지", "평상 시간대 오차 > 기준 × 임계", /\[WARN\] drift detected/],
+  ["알림", "logs/aiops.log 기록", /\[WARN\] drift detected/],
+  ["fine-tuning", "Production 가중치에서 이어서 학습", /\[INFO\] retrain triggered/],
+  ["게이트", "평상 RMSE · 이벤트 RMSE · 기존 대비", /\[OK\]|\[FAIL\]/],
+  ["배포", "통과 시 승격, 실패 시 기존 유지", /\[OK\]|\[FAIL\]/],
+];
+
+function renderPipeline(lines) {
+  let start = -1;
+  lines.forEach((l, i) => { if (/\[WARN\] drift detected/.test(l)) start = i; });
+  const recent = start >= 0 ? lines.slice(start) : [];
+  const failed = recent.some((l) => /\[FAIL\]/.test(l));
+  $("#pipeline").innerHTML = STAGES.map(([name, desc, re], i) => {
+    const hit = recent.some((l) => re.test(l));
+    let cls = "idle", label = "대기";
+    if (hit) { cls = "good"; label = "완료"; }
+    if (hit && i >= 3 && failed) { cls = "warning"; label = i === 4 ? "기존 버전 유지" : "미통과"; }
+    if (hit && i === 4 && !failed) { const m = recent.join("\n").match(/promoted: (\S+ v\d+)/); label = m ? `승격 ${m[1]}` : "승격"; }
+    return `<div class="stage"><div class="name">${name}</div><div class="desc">${desc}</div>
+      <div class="st"><span class="dot ${cls}" style="width:8px;height:8px;border-radius:50%;display:inline-block"></span>${label}</div></div>`;
+  }).join("");
+}
+
+async function loadLogs() {
+  try {
+    const files = await api("/logs");
+    if (!files.find((f) => f.name === "aiops.log")) { $("#log-content").textContent = "(로그 없음)"; renderPipeline([]); return; }
+    const log = await api("/logs/aiops.log");
+    const lines = log.content.trim().split("\n").filter(Boolean);
+    $("#log-content").textContent = lines.slice(-60).join("\n") || "(비어 있음)";
+    renderPipeline(lines);
+  } catch (e) { $("#log-content").textContent = e.message; }
+}
+
+/* ---------- data ---------- */
+async function loadData() {
+  try {
+    const s = await api("/data/status");
+    $("#data-body").innerHTML = s.corridors.length ? s.corridors.map((h) => `<tr><td>${esc(corrName(h.corridor))}</td>
+      <td>${h.rows.toLocaleString()}</td><td>${esc(h.start.slice(0, 10))} ~ ${esc(h.end.slice(0, 13))}시</td>
+      <td>${h.volume_missing.toLocaleString()}</td><td>${esc(h.sources)}</td></tr>`).join("")
+      : `<tr><td colspan="5" class="empty">데이터 없음 - <code>python scripts/generate_synthetic_data.py</code> 또는 업로드</td></tr>`;
+    const lag = s.volume_arrival_lag_hours;
+    $("#lag-note").textContent = lag
+      ? `교통량 이력 API 도착 지연 (시간대 종료 후): 중앙값 ${lag.median.toFixed(1)}h · 90% ${lag.p90.toFixed(1)}h (n=${lag.n})`
+      : "교통량 이력 API 도착 지연: 아직 측정 전 (scripts/collect_hourly.py 로 수집하면 자동 기록)";
+  } catch (e) { $("#data-body").innerHTML = `<tr><td colspan="5" class="empty">${esc(e.message)}</td></tr>`; }
+}
+
+$("#data-upload").addEventListener("click", async () => {
+  const file = $("#data-file").files[0];
+  if (!file) return showResult("#data-result", "CSV 파일을 선택하세요", false);
+  const fd = new FormData(); fd.append("file", file);
+  try { const r = await api("/data/upload", { method: "POST", body: fd }); showResult("#data-result", JSON.stringify(r, null, 2)); loadData(); loadForecast(); }
+  catch (e) { showResult("#data-result", e.message, false); }
+});
+
+$("#predict-btn").addEventListener("click", loadForecast);
+// 데이터 마지막 시각 이전에 끝난 가장 최근 경기·행사의 시작 3시간 전으로 발행 시각 설정 (실측 비교용)
+$("#preset-game").addEventListener("click", async () => {
+  const st = await api("/data/status");
+  const dataEnd = st.corridors.map((c) => c.end).sort()[0];
+  if (!dataEnd) return;
+  const evs = (await api(`/events?status=scheduled&end=${encodeURIComponent(dataEnd)}&limit=500`))
+    .filter((e) => HUBS[e.hub]?.enabled && e.start <= dataEnd && e.start.slice(11, 13) >= "12");
+  const last = evs.sort((a, b) => a.start.localeCompare(b.start)).at(-1);
+  if (!last) return;
+  const t = new Date(last.start.replace(" ", "T"));
+  t.setHours(t.getHours() - 3);
+  const pad = (n) => String(n).padStart(2, "0");
+  $("#issued-at").value = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:00`;
+  loadForecast();
+});
+$("#drift-refresh").addEventListener("click", () => { loadDrift(); loadIncidents(); loadLogs(); });
+$("#logs-refresh").addEventListener("click", loadLogs);
+
+(async () => {
+  loadHealth();
+  try { await loadHubs(); } catch (e) {}
+  await loadForecast();
+  loadEvents(); loadDrift(); loadIncidents(); loadLogs(); loadData();
+})();
+</script>
+</body>
+</html>

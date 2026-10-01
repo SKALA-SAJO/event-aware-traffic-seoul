@@ -1,0 +1,26 @@
+# 서빙 컨테이너 (로컬 개발 서버는 8077, 컨테이너는 8099)
+#
+#   docker compose -f serving_app/docker-compose.yml up --build
+#   → http://localhost:8099/
+#
+# 드리프트 시뮬레이션은 컨테이너 안에서 실행합니다 (스크립트가 DB 를 직접 읽기 때문):
+#   docker compose -f serving_app/docker-compose.yml exec serving-app \
+#       env API_URL=http://localhost:8099 python scripts/simulate_drift.py
+services:
+  serving-app:
+    build:
+      context: ..
+      dockerfile: serving_app/Dockerfile
+    ports: ["8099:8099"]
+    env_file:                 # API 키 (.env 는 이미지에 넣지 않고 실행 시에만 전달)
+      - path: ../.env
+        required: false
+    environment:
+      - EVENT_NLP_BACKEND=${EVENT_NLP_BACKEND:-rule}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ../logs:/app/logs
+      # 수집이 계속 쌓이는 운영 DB 를 쓰려면 (이미지에 구운 시점의 DB 대신):
+      # - ../data/traffic.db:/app/data/traffic.db
+      # - ../mlflow.db:/app/mlflow.db
+      # - ../mlruns:/app/mlruns

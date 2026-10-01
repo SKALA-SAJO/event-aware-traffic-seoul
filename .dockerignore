@@ -1,0 +1,14 @@
+.venv
+.git
+mlruns
+mlflow.db
+logs
+reports
+data/traffic_synthetic.db
+mlflow_synthetic.db
+data/uploads
+data/raw
+data/synthetic
+**/__pycache__
+serving_app/models/*.keras
+.env
