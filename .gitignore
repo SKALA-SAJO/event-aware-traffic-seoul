@@ -33,6 +33,9 @@ data/synthetic/
 # 이벤트 입력(집회·A매치·통제 공지, 약 2.5MB)과 출처 문서는 재현을 위해 커밋
 data/raw/*
 !data/raw/events/
+# KOPIS 공연시설 캐시(공개 정보, 136KB): 없으면 매번 거점 구 공연시설 약 880곳을 다시 조회해 5분 걸림
+# (GitHub Actions collect_events). hubs.yaml 의 kopis_districts 를 바꾸면 hub_venues(refresh=True) 로 갱신
+!data/raw/kopis_venues.json
 data/uploads/*
 !data/uploads/.gitkeep
 data/sample_haic_prices.csv
