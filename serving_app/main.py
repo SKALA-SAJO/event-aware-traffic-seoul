@@ -14,7 +14,8 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from serving_app import model_loader
@@ -41,6 +42,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Seoul Event-aware Traffic Forecast", lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # 기본 500 응답은 text/plain 이라 프론트에서 `{}`로 보일 수 있습니다.
+    # 사용자에게 메시지를 전달할 수 있도록 JSON detail 로 통일합니다.
+    logging.exception("Unhandled server error: %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": str(exc) or "Internal Server Error"})
 
 app.include_router(predict.router)
 app.include_router(events.router)

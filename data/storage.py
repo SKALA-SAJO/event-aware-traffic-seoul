@@ -24,7 +24,45 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
-DB_PATH = os.getenv("TRAFFIC_DB", "data/traffic.db")
+def _default_db_path() -> str:
+    # 실데이터/운영 기본: data/traffic.db
+    # 빠른 시작(합성 데이터)에서는 data/traffic_synthetic.db 가 함께 제공될 수 있습니다.
+    # 다만 traffic.db 는 "테이블만 있는 빈 DB"로도 쉽게 생성되므로,
+    # 환경변수가 없으면 "관측치가 실제로 존재하는 DB"를 우선 선택합니다.
+
+    def has_observations(path: str) -> bool:
+        if not os.path.exists(path):
+            return False
+        try:
+            conn = sqlite3.connect(path)
+            try:
+                ok = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='observations'"
+                ).fetchone()
+                if not ok:
+                    return False
+                n = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
+                return int(n or 0) > 0
+            finally:
+                conn.close()
+        except Exception:
+            return False
+
+    primary = "data/traffic.db"
+    synthetic = "data/traffic_synthetic.db"
+
+    if has_observations(primary):
+        return primary
+    if has_observations(synthetic):
+        return synthetic
+    if os.path.exists(primary):
+        return primary
+    if os.path.exists(synthetic):
+        return synthetic
+    return primary
+
+
+DB_PATH = os.getenv("TRAFFIC_DB") or _default_db_path()
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 
 _SCHEMA = """
