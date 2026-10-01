@@ -57,4 +57,10 @@ jobs:
           git add collected
           git diff --cached --quiet && exit 0
           git commit -q -m "collect $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
-          git push -q origin data-collect
+          # 다른 수집 워크플로가 먼저 푸시했으면 받아서 다시 올림 (서로 다른 파일이라 충돌 없음)
+          for i in 1 2 3 4 5; do
+            git push -q origin data-collect && exit 0
+            git pull -q --rebase origin data-collect
+            sleep $((i * 5))
+          done
+          exit 1
