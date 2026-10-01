@@ -1,4 +1,4 @@
-# 예정 이벤트 수집: 하루 1회(한국 시간 19:30) 앞으로 90일의 KOPIS 공연·KBO·K리그 일정을 받아
+# 예정 이벤트 수집: 하루 1회(한국 시간 19:37) 앞으로 90일의 KOPIS 공연·KBO·K리그 일정을 받아
 # data-collect 브랜치의 collected/events/날짜.csv 로 저장합니다. 매일의 목록이 남으므로
 # 일정마다 처음 보인 날이 "실제로 알 수 있었던 시점"의 근거가 됩니다.
 # 노트북에서 git fetch origin data-collect && python scripts/import_collected.py 로 DB 에 넣습니다.
@@ -10,7 +10,7 @@ name: collect-events
 
 on:
   schedule:
-    - cron: "30 10 * * *"   # UTC 10:30 = 한국 19:30 (경찰청 다음 날 집회 일정 게시 18시 이후)
+    - cron: "37 10 * * *"   # UTC 10:37 = 한국 19:37 (경찰청 다음 날 집회 일정 게시 18시 이후)
   workflow_dispatch: {}
 
 permissions:

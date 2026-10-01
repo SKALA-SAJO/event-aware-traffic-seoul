@@ -11,7 +11,7 @@ name: collect-realtime
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "7,37 * * * *"   # 매시 07·37분 (정각·30분은 GitHub 예약 실행이 몰려 지연·누락이 잦음)
   workflow_dispatch: {}
 
 permissions:
