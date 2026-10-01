@@ -1,0 +1,58 @@
+# 예정 이벤트 수집: 하루 1회(한국 시간 19:30) 앞으로 90일의 KOPIS 공연·KBO·K리그 일정을 받아
+# data-collect 브랜치의 collected/events/날짜.csv 로 저장합니다. 매일의 목록이 남으므로
+# 일정마다 처음 보인 날이 "실제로 알 수 있었던 시점"의 근거가 됩니다.
+# 노트북에서 git fetch origin data-collect && python scripts/import_collected.py 로 DB 에 넣습니다.
+#
+# 준비: Secrets 에 KOPIS_API_KEY (KOPIS 인증키). 없으면 경기 일정만 받습니다.
+# 속도 수집(collect_realtime.yml)과 같은 브랜치에 커밋하므로 같은 concurrency 그룹으로 차례로 실행합니다.
+name: collect-events
+
+on:
+  schedule:
+    - cron: "30 10 * * *"   # UTC 10:30 = 한국 19:30 (경찰청 다음 날 집회 일정 게시 18시 이후)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-realtime
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20      # KOPIS 는 초당 호출 제한 때문에 5분 안팎 걸림
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: 의존성 (수집에 필요한 것만)
+        run: pip install pandas pyyaml requests
+
+      - name: data-collect 브랜치 준비
+        run: |
+          if git ls-remote --exit-code --heads origin data-collect; then
+            git fetch origin data-collect
+            git worktree add store origin/data-collect -B data-collect
+          else
+            git worktree add --orphan -b data-collect store
+          fi
+
+      - name: 수집
+        env:
+          KOPIS_API_KEY: ${{ secrets.KOPIS_API_KEY }}
+        run: python scripts/collect_events.py --out store/collected
+
+      - name: 커밋·푸시
+        working-directory: store
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add collected
+          git diff --cached --quiet && exit 0
+          git commit -q -m "events $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          git push -q origin data-collect

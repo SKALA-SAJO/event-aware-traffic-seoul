@@ -1,0 +1,72 @@
+"""
+예정 이벤트 스냅숏 수집 (하루 1회, GitHub Actions 용): 앞으로 N일의 KOPIS 공연·KBO·K리그 일정 → CSV.
+
+    KOPIS_API_KEY=... python scripts/collect_events.py --out collected [--days 90]
+
+    collected/events/YYYY-MM-DD.csv   그날 받은 예정 일정 전체 (fetched_at 포함)
+
+매일 "그날 보인 목록"을 통째로 남기므로, 일정마다 처음 보인 날 = 실제로 알 수 있었던 시점의 근거가 됩니다.
+scripts/import_collected.py 가 announced_at = min(수집기 가정값, 처음 보인 시각) 으로 DB 에 넣습니다.
+(지금까지는 공개 시각을 '경기 7일 전', 'KOPIS 갱신 시각 또는 30일 전'으로 가정)
+집회는 경찰청 게시판 수집기가 생기면 여기에 추가합니다.
+"""
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pandas as pd
+
+from data.config import hubs
+
+COLS = ["fetched_at", "source", "hub", "type", "title", "start", "end", "expected_size", "announced_at", "status",
+        "status_changed_at", "external_id", "venue", "lat", "lon", "end_estimated", "runtime_text", "description"]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default="collected")
+    ap.add_argument("--days", type=int, default=90)
+    args = ap.parse_args()
+
+    now = pd.Timestamp.now(tz="Asia/Seoul").tz_localize(None).floor("min")
+    start, end = now.normalize(), now.normalize() + pd.Timedelta(days=args.days)
+    records, ok = [], 0
+
+    try:
+        from data.collectors.sports import kbo_events, kleague_events
+
+        sports = kbo_events(start, end) + kleague_events(start, end)
+        records += sports
+        ok += 1
+        print(f"  KBO·K리그 {len(sports)}건")
+    except Exception as e:
+        print(f"  sports: {e}")
+
+    if os.getenv("KOPIS_API_KEY"):
+        try:
+            from data.collectors.kopis import events_for_hubs
+
+            kopis, stats = events_for_hubs(start.strftime("%Y%m%d"), end.strftime("%Y%m%d"), now)
+            records += kopis
+            ok += 1
+            print(f"  KOPIS {len(kopis)}회차 (공연 {stats['performances']}건)")
+        except Exception as e:
+            print(f"  kopis: {e}")
+    else:
+        print("  KOPIS_API_KEY 없음 - KOPIS 건너뜀")
+
+    known = set(hubs(include_disabled=True))
+    df = pd.DataFrame([r for r in records if r.get("hub") in known]).reindex(columns=COLS)
+    df["fetched_at"] = now
+    path = os.path.join(args.out, "events", f"{now:%Y-%m-%d}.csv")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    df.to_csv(path, index=False)  # 하루 한 파일: 같은 날 다시 돌리면 최신 목록으로 덮어씀
+    print(f"{now} 예정 일정 {len(df)}건 ({start:%m-%d} ~ {end:%m-%d}) -> {path}")
+    if ok == 0:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

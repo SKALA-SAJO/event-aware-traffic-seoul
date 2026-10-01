@@ -8,6 +8,9 @@ GitHub Actions 가 15분마다 쌓은 스냅숏(data-collect 브랜치) → 링�
     속도  : collected_at 을 시간대(HH:00)로 내려 링크별 평균 → link_speed(source=api)
             한 시간대에 스냅숏이 min_snapshots 개 미만이면 건너뜀 (아직 수집 중인 시간대·누락 대비)
     돌발  : acc_id 별 마지막으로 본 시각을 last_seen 으로 → incidents
+    이벤트: 하루 1회 스냅숏(collect_events.py). 일정마다 가장 최근 스냅숏의 내용을 쓰고,
+            announced_at = min(수집기의 가정값, 처음 보인 시각) - 실제로 먼저 보였으면 그 시각이 근거가 됨.
+            취소는 처음 '취소'로 보인 시각을 status_changed_at 으로 (수집기 가정값보다 늦으면 이쪽을 씀)
 다시 실행해도 같은 시간대는 덮어쓰므로 중복되지 않습니다.
 """
 import argparse
@@ -73,6 +76,27 @@ def main():
         last = last.astype(object).where(last.notna(), None)
         rows = [{**r, "last_seen": r["collected_at"], "source": "api"} for r in last.to_dict("records")]
         print(f"돌발: {storage.upsert_incidents(rows)}건")
+
+
+    ev = read("events")
+    if not ev.empty:
+        import_events(ev)
+
+
+def import_events(ev: pd.DataFrame) -> None:
+    key = ["source", "hub", "type", "title", "start"]
+    for c in ("fetched_at", "announced_at", "status_changed_at", "start", "end"):
+        ev[c] = pd.to_datetime(ev[c], errors="coerce")
+    ev = ev.sort_values("fetched_at")
+    first_seen = ev.groupby(key)["fetched_at"].transform("min")
+    first_cancel = ev["fetched_at"].where(ev["status"] == "cancelled").groupby([ev[k] for k in key]).transform("min")
+    ev["announced_at"] = pd.concat([ev["announced_at"], first_seen], axis=1).min(axis=1)
+    ev["status_changed_at"] = pd.concat([ev["status_changed_at"], first_cancel], axis=1).max(axis=1)
+    latest = ev.groupby(key).tail(1).drop(columns="fetched_at")
+    latest = latest.astype(object).where(latest.notna(), None)
+    ids = storage.upsert_events(latest.to_dict("records"))
+    print(f"이벤트: 스냅숏 {ev['fetched_at'].nunique()}회 → 일정 {len(ids)}건 "
+          f"{latest.groupby('source').size().to_dict()}")
 
 
 if __name__ == "__main__":
