@@ -25,7 +25,7 @@ _retrain_lock = threading.Lock()
 
 def check_and_trigger(corridor: str) -> dict:
     model = model_loader.get_model()
-    status = drift_status(corridor, model)
+    status = drift_status(corridor, model, replay_if_empty=False)  # 재학습은 실제 예측 기록으로만 판단
 
     if status["status"] != "drift":
         known = status.get("rmse_known_event_hours")

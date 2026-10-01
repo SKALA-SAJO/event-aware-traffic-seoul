@@ -86,6 +86,8 @@
   .legend .sw { display: inline-block; width: 16px; height: 0; vertical-align: middle; margin-right: 5px; border-top: 2px solid var(--series-1); }
   .legend .sw.usual { border-top: 2px dashed var(--muted); }
   .legend .sw.actual { border-top: 2px solid var(--text); }
+  .drift-mode { margin-top: 6px; font-size: 0.8rem; color: var(--text-2); border-left: 3px solid var(--axis); padding-left: 8px; }
+  td .sub { font-size: 0.72rem; color: var(--text-2); margin-top: 3px; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .issue-ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .issue-ctl input { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
@@ -343,12 +345,13 @@
     <div class="section-head">
       <div>
         <h2>드리프트 모니터링</h2>
-        <p>방향별 최근 72시간 예측 오차(현재 모델 버전). 등록된 이벤트·공휴일과 일시적 돌발(사고 등) 시간은 판정에서 제외하고, 공사처럼 지속되는 예정 외 변화만 재학습 대상으로 봅니다.</p>
+        <p>방향별 최근 72시간 예측 오차(현재 모델 버전)를 기준 오차와 비교합니다. 등록된 이벤트·공휴일과 일시적 돌발(사고 등) 시간은 판정에서 빼고, 남은 평상 시간의 오차가 기준의 1.5배를 넘으면 예정에 없던 변화로 봅니다. 감지되면 경보를 내고 재학습은 14일 주기로 합니다.</p>
+        <p id="drift-mode" class="drift-mode" hidden></p>
       </div>
       <button class="btn" id="drift-refresh" type="button">새로고침</button>
     </div>
     <div class="table-scroll"><table>
-      <thead><tr><th>방향</th><th>상태</th><th>평상 RMSE</th><th>기준 RMSE</th><th>비율 / 임계</th><th>판정 시간</th><th>제외(이벤트·공휴일 / 돌발)</th><th>진행 중 공사</th></tr></thead>
+      <thead><tr><th>방향</th><th>상태</th><th>평상 RMSE</th><th>기준 RMSE</th><th>비율 / 임계</th><th>판정 시간 / 필요</th><th>제외(이벤트·공휴일 / 돌발)</th><th>진행 중 공사</th></tr></thead>
       <tbody id="drift-body"><tr><td colspan="8" class="empty">-</td></tr></tbody>
     </table></div>
 
@@ -663,7 +666,12 @@ $("#event-upload").addEventListener("click", async () => {
 
 /* ---------- drift ---------- */
 const STATUS = {
-  ok: ["good", "정상"], drift: ["critical", "드리프트"], insufficient_data: ["idle", "판정 보류"],
+  ok: ["good", "정상"], drift: ["critical", "드리프트 감지"], insufficient_data: ["idle", "판정 대기"],
+};
+// 판정 대기 이유: 비교할 예측이 없음 / 이벤트·공휴일·돌발을 빼고 남은 시간이 모자람
+const REASON = {
+  no_predictions: () => "비교할 예측 없음",
+  too_few_hours: (r) => `${r.n_hours ?? 0}/${r.min_samples ?? 36}시간 (이벤트 제외가 많음)`,
 };
 const fmt = (v, d = 2) => v == null ? "-" : Number(v).toFixed(d);
 
@@ -672,12 +680,18 @@ const corrName = (id) => CORR[id] ? `${CORR[id].hubName} ${CORR[id].name}` : id;
 async function loadDrift() {
   try {
     const rows = await api("/monitoring/drift");
+    // 예측 기록이 없어 서버가 같은 기간을 다시 예측해 판정한 경우(과거 재현)를 표 위에 밝힘
+    const replay = rows.find((r) => r.mode === "replay");
+    const note = $("#drift-mode");
+    note.hidden = !replay;
+    if (replay) note.textContent = `과거 재현 판정: 실시간 예측 기록이 아직 없어 ${replay.window_start.slice(5, 16)} ~ ${replay.window_end.slice(5, 16)} 을 현재 모델로 매시 다시 예측해 실측과 비교한 결과입니다. 예측 기록이 쌓이면 자동으로 기록 기준 판정으로 바뀝니다.`;
     $("#drift-body").innerHTML = rows.map((r) => {
       const [cls, label] = STATUS[r.status] ?? ["idle", r.status];
+      const why = r.status === "insufficient_data" && REASON[r.reason] ? `<div class="sub">${esc(REASON[r.reason](r))}</div>` : "";
       return `<tr><td>${esc(corrName(r.corridor))}</td>
-        <td><span class="pill"><span class="dot ${cls}"></span>${label}</span></td>
+        <td><span class="pill"><span class="dot ${cls}"></span>${label}</span>${why}</td>
         <td>${fmt(r.rmse)}</td><td>${fmt(r.reference_rmse)}</td><td>${fmt(r.ratio)} / ${r.threshold ?? "-"}</td>
-        <td>${r.n_hours ?? 0}h</td><td>${r.excluded_hours ?? 0}h / ${r.excluded_incident_hours ?? 0}h</td>
+        <td>${r.n_hours ?? 0}h / ${r.min_samples ?? 36}h</td><td>${r.excluded_hours ?? 0}h / ${r.excluded_incident_hours ?? 0}h</td>
         <td>${(r.constructions ?? []).map((c) => esc(c)).join("<br>") || "-"}</td></tr>`;
     }).join("");
   } catch (e) { $("#drift-body").innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`; }
