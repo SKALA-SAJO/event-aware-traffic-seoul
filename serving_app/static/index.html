@@ -326,15 +326,15 @@
     <!-- ===================== 이벤트 목록 ===================== -->
     <section class="card" tabindex="0">
       <div class="section-head">
-        <div><h2>이벤트 일정</h2><p>다가오는 일정(마지막 관측 이후 7일) · 자동 수집 중 시각을 확정하지 못한 검토 대기 일정</p></div>
+        <div><h2>이벤트 일정</h2><p>다가오는 일정(현재 시각 기준 7일, 진행 중 포함) · 자동 수집 중 시각을 확정하지 못한 검토 대기 일정</p></div>
         <div class="tabs" role="tablist">
           <button class="tab" role="tab" aria-selected="true" data-evtab="upcoming" type="button">다가오는 일정</button>
           <button class="tab" role="tab" aria-selected="false" data-evtab="review" type="button">검토 대기</button>
         </div>
       </div>
       <div class="table-scroll"><table>
-        <thead><tr><th>거점</th><th>일정</th><th>시작–종료</th><th>규모</th><th>속성</th><th></th></tr></thead>
-        <tbody id="events-body"><tr><td colspan="6" class="empty">-</td></tr></tbody>
+        <thead><tr><th>거점</th><th>일정</th><th>시작–종료</th><th>규모</th><th></th></tr></thead>
+        <tbody id="events-body"><tr><td colspan="5" class="empty">-</td></tr></tbody>
       </table></div>
       <div class="note" id="events-note"></div>
     </section>
@@ -616,29 +616,36 @@ async function loadEvents() {
       evs = await api(`/events?status=review`);
       $("#events-note").textContent = "자동 수집 중 회차 시각을 확정하지 못한 일정입니다. 예측에 쓰이지 않으며, 시각을 확인한 뒤 확정하세요.";
     } else {
-      // corridor 마다 마지막 관측 시각이 다를 수 있으므로 가장 이른 시각부터 7일
+      // 기준 시각 = max(가장 이른 corridor 마지막 관측 시각, 현재 시각). 실시간 운영에서는 현재 시각 기준이고,
+      // 과거·합성 데이터(마지막 관측이 현재보다 과거)에서는 마지막 관측 이후를 "다가오는 일정"으로 봅니다.
+      // 이미 끝난 일정은 빼고, 진행 중(시작 후 종료 전)인 일정은 남깁니다.
       const st = await api("/data/status");
       const ends = st.corridors.map((h) => h.end).sort();
-      const from = ends.length ? ends[0].replace(" ", "T") : new Date().toISOString().slice(0, 19);
-      const to = new Date(new Date(from).getTime() + 7 * 864e5).toISOString().slice(0, 19);
-      evs = (await api(`/events?start=${from}&end=${to}`)).filter((e) => e.status !== "review" && HUBS[e.hub]?.enabled !== false);
+      const fmt = (d) => { const p2 = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:00`; };
+      const nowStr = fmt(new Date());
+      const from = ends.length && ends[0] > nowStr ? ends[0] : nowStr;
+      const fromDt = new Date(from.replace(" ", "T"));
+      const to = fmt(new Date(fromDt.getTime() + 7 * 864e5));
+      const back = fmt(new Date(fromDt.getTime() - 864e5));  // 진행 중인 일정을 놓치지 않도록 하루 전부터 조회
+      evs = (await api(`/events?start=${encodeURIComponent(back)}&end=${encodeURIComponent(to)}`))
+        .filter((e) => e.status !== "review" && HUBS[e.hub]?.enabled !== false && e.end >= from);
+      evs.forEach((e) => { e.ongoing = e.start <= from; });
       $("#events-note").textContent = "취소는 삭제 대신 '취소'로 기록합니다 - 취소 공지 전 예측·학습에서는 예정으로 보였던 사실을 남기기 위함.";
     }
     $("#events-body").innerHTML = evs.length ? evs.map((e) => {
-      const tags = [e.march ? "행진" : "", e.lane_control ? "차로통제" : "", e.status === "cancelled" ? "취소" : "",
-        e.end_estimated ? "종료 추정" : ""].filter(Boolean).map((t) => `<span class="badge">${t}</span>`).join(" ");
       const actions = e.status === "review"
         ? `<button class="btn" data-st="scheduled" data-id="${e.id}" type="button">확정</button>`
         : e.status === "cancelled" ? "" : `<button class="btn" data-st="cancelled" data-id="${e.id}" type="button">취소</button>`;
       return `<tr><td>${esc(HUBS[e.hub]?.name ?? e.hub)}</td><td>${esc(TYPE_KO[e.type] ?? e.type)} · ${esc(e.title)}<br><span class="hub-meta">${esc(e.source ?? "")}</span></td>
         <td>${esc(e.start.slice(5, 16))}–${esc(e.end.slice(11, 16))}</td><td>${e.expected_size ? Number(e.expected_size).toLocaleString() : "-"}</td>
-        <td>${tags || "-"}</td><td style="white-space:nowrap">${actions} <button class="btn" data-del="${e.id}" type="button">삭제</button></td></tr>`;
-    }).join("") : `<tr><td colspan="6" class="empty">${EV_TAB === "review" ? "검토 대기 일정이 없습니다" : "예정된 이벤트가 없습니다"}</td></tr>`;
+        <td style="white-space:nowrap">${actions} <button class="btn" data-del="${e.id}" type="button">삭제</button></td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="empty">${EV_TAB === "review" ? "검토 대기 일정이 없습니다" : "예정된 이벤트가 없습니다"}</td></tr>`;
     document.querySelectorAll("[data-st]").forEach((b) => b.addEventListener("click", () => setStatus(b.dataset.id, b.dataset.st)));
     document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
       await api(`/events/${b.dataset.del}`, { method: "DELETE" }); loadEvents(); loadForecast();
     }));
-  } catch (e) { $("#events-body").innerHTML = `<tr><td colspan="6" class="empty">${esc(e.message)}</td></tr>`; }
+  } catch (e) { $("#events-body").innerHTML = `<tr><td colspan="5" class="empty">${esc(e.message)}</td></tr>`; }
 }
 
 function showResult(id, text, ok = true) {
