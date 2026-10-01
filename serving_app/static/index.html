@@ -442,7 +442,7 @@ async function loadHealth() {
     const h = await api("/health");
     $("#health-pill").innerHTML = `<span class="dot good"></span><span>서버 정상</span>`;
     const kind = h.model_kind === "calendar_baseline" ? "캘린더 기준" : (h.model_kind === "event_aware" ? "이벤트 반영" : h.model_source);
-    $("#version-pill").textContent = `모델 ${h.model_version ?? "(미로딩)"} · ${kind} · 데이터 ${h.data_store}`;
+    $("#version-pill").textContent = `모델 ${h.model_version ?? "(미로딩)"} · ${kind} · 데이터 ${h.data_store ?? ((h.traffic_db ?? "").split("/").pop() || "-")}`;
     if (h.model_kind === "calendar_baseline") {
       $("#service-subtitle").textContent = "향후 통행속도 · 평소 대비 추가 소요시간 (현재 일정 미사용)";
       $("#event-help").textContent = "일정을 저장하고 표시할 수 있습니다. 현재 캘린더 기준 모델은 일정을 예측 입력에 사용하지 않습니다.";
