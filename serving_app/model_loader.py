@@ -118,9 +118,10 @@ class LoadedModel:
                 "speed_kmh": round(speed, 1),
                 "actual_speed_kmh": round(float(actual[ts]), 1) if pd.notna(actual.get(ts)) else None,
                 "usual_speed_kmh": round(base, 1) if base else None,
-                "travel_time_min": round(tt, 1),
-                "usual_travel_time_min": round(base_tt, 1) if base_tt else None,
-                "extra_min": round(tt - base_tt, 1) if base_tt else None,
+                # 분 단위 소수 셋째 자리(약 0.06초) - 대시보드가 초 단위로 반올림해 표시 (0.1분이면 6초 단위로 뭉개짐)
+                "travel_time_min": round(tt, 3),
+                "usual_travel_time_min": round(base_tt, 3) if base_tt else None,
+                "extra_min": round(tt - base_tt, 3) if base_tt else None,
                 "events": active["title"].tolist(),
             })
         return {
