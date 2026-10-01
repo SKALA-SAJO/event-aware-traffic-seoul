@@ -4,7 +4,8 @@
 # 노트북에서 git fetch origin data-collect && python scripts/import_collected.py 로 DB 에 넣습니다.
 #
 # 준비: Secrets 에 KOPIS_API_KEY (KOPIS 인증키). 없으면 경기 일정만 받습니다.
-# 속도 수집(collect_realtime.yml)과 같은 브랜치에 커밋하므로 같은 concurrency 그룹으로 차례로 실행합니다.
+# 속도 수집(collect_realtime.yml)과 같은 브랜치에 커밋합니다. 그룹을 같게 두면 대기 중인 실행이 다음 실행에
+# 밀려 취소될 수 있어 그룹은 따로 두고, 푸시가 겹치면 최신을 받아 다시 올립니다.
 name: collect-events
 
 on:
@@ -16,7 +17,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: collect-realtime
+  group: collect-events
   cancel-in-progress: false
 
 jobs:
@@ -55,4 +56,10 @@ jobs:
           git add collected
           git diff --cached --quiet && exit 0
           git commit -q -m "events $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
-          git push -q origin data-collect
+          # 다른 수집 워크플로가 먼저 푸시했으면 받아서 다시 올림 (서로 다른 파일이라 충돌 없음)
+          for i in 1 2 3 4 5; do
+            git push -q origin data-collect && exit 0
+            git pull -q --rebase origin data-collect
+            sleep $((i * 5))
+          done
+          exit 1
