@@ -1,0 +1,58 @@
+# 실시간 수집: 15분마다 corridor 링크 속도·돌발 정보를 받아 data-collect 브랜치의 CSV 에 추가합니다.
+# 노트북에서 git fetch origin data-collect && python scripts/import_collected.py 로 DB 에 1시간 평균으로 넣습니다.
+#
+# 준비: 저장소 Settings → Secrets and variables → Actions → New repository secret
+#       이름 SEOUL_API_KEY, 값 = 서울 열린데이터광장 인증키
+# 주의: schedule 은 기본 브랜치(main)에 이 파일이 있어야 동작합니다. GitHub 사정에 따라 몇 분~수십 분 늦게
+#       실행되거나 건너뛸 수 있고, 저장소에 60일간 활동이 없으면 자동으로 꺼집니다.
+name: collect-realtime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-realtime
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 의존성 (수집에 필요한 것만)
+        run: pip install pandas pyyaml requests
+
+      - name: data-collect 브랜치 준비
+        run: |
+          if git ls-remote --exit-code --heads origin data-collect; then
+            git fetch origin data-collect
+            git worktree add store origin/data-collect -B data-collect
+          else
+            git worktree add --orphan -b data-collect store
+          fi
+
+      - name: 수집
+        env:
+          SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
+        run: python scripts/collect_snapshot.py --out store/collected
+
+      - name: 커밋·푸시
+        working-directory: store
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add collected
+          git diff --cached --quiet && exit 0
+          git commit -q -m "collect $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          git push -q origin data-collect
