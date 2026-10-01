@@ -39,7 +39,20 @@ from serving_app import training as T
 
 MODEL_NAME = "TrafficSpeedForecaster"
 PRODUCTION_ALIAS = "production"
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+
+
+def _default_tracking_uri() -> str:
+    # 환경변수가 없으면 "존재하는 파일"을 우선 사용합니다.
+    # - 실데이터/운영: mlflow.db
+    # - 빠른 시작(합성 데이터): mlflow_synthetic.db
+    if os.path.exists("mlflow.db"):
+        return "sqlite:///mlflow.db"
+    if os.path.exists("mlflow_synthetic.db"):
+        return "sqlite:///mlflow_synthetic.db"
+    return "sqlite:///mlflow.db"
+
+
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI") or _default_tracking_uri()
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment("traffic-speed")
 

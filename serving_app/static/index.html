@@ -283,8 +283,15 @@ let HUBS = {};
 
 async function api(path, opts = {}) {
   const res = await fetch(path, opts);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body));
+  const text = await res.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch (e) {}
+  if (!res.ok) {
+    const detail = typeof body.detail === "string"
+      ? body.detail
+      : (Object.keys(body || {}).length ? JSON.stringify(body.detail ?? body) : (text || "").trim());
+    throw new Error(detail || `${res.status} ${res.statusText}`);
+  }
   return body;
 }
 
@@ -415,7 +422,11 @@ async function loadForecast() {
     byHub.forEach((fcs) => grid.appendChild(renderHub(fcs[0].name, fcs)));
     loadHealth();
   } catch (e) {
-    grid.innerHTML = `<div class="empty">예측 실패: ${esc(e.message)}<br>데이터 적재와 모델 학습(<code>python serving_app/train_and_register.py</code>)을 먼저 확인하세요.</div>`;
+    const raw = String(e?.message ?? "");
+    const baseHint = `데이터 적재와 모델 학습(<code>python serving_app/train_and_register.py</code>)을 먼저 확인하세요.`;
+    const dateHint = `선택한 발행 시각이 데이터 범위 밖입니다. <code>/health</code> 또는 <code>/data/status</code>에서 마지막 관측 시각을 확인하세요.`;
+    const hint = raw.includes("마지막 관측치") && raw.includes("이후") ? dateHint : baseHint;
+    grid.innerHTML = `<div class="empty">예측 실패: ${esc(raw)}<br>${hint}</div>`;
   } finally { $("#predict-btn").disabled = false; }
 }
 

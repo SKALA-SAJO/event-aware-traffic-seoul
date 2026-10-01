@@ -3,10 +3,11 @@ import datetime as dt
 import os
 
 import pandas as pd
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from data import storage
 from data.config import corridors, hubs
+from serving_app.errors import ModelLoadError
 from serving_app import model_loader
 from serving_app.monitoring.drift_detector import drift_status
 
@@ -22,6 +23,9 @@ def health():
         "model_version": cached.version if cached else None,
         "loading_mode": os.getenv("LOADING_MODE", "lazy"),
         "model_source": os.getenv("MODEL_SOURCE", "mlflow"),
+        "traffic_db": storage.DB_PATH,
+        "traffic_db_env": os.getenv("TRAFFIC_DB"),
+        "mlflow_tracking_uri_env": os.getenv("MLFLOW_TRACKING_URI"),
         "last_observation": str(storage.last_observation_ts() or ""),
     }
 
@@ -43,7 +47,10 @@ def list_hubs():
 
 @router.get("/monitoring/drift")
 def drift():
-    model = model_loader.get_model()
+    try:
+        model = model_loader.get_model()
+    except ModelLoadError as e:
+        raise HTTPException(503, str(e))
     return [drift_status(c, model) for c in model.units]
 
 

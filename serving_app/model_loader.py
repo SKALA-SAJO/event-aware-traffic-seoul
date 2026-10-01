@@ -25,6 +25,7 @@ import pandas as pd
 from data import storage
 from data.config import corridors, hub_of
 from data.features import FeatureSpec, TrafficScaler, build_frame, make_windows, usual_speed
+from serving_app.errors import ModelLoadError
 
 LOCAL_MODEL_PATH = "serving_app/models/model.keras"
 LOCAL_PREPROCESS_PATH = "serving_app/models/preprocess.json"
@@ -71,12 +72,21 @@ class LoadedModel:
         """
         if corridor not in self.units:
             raise KeyError(f"모델이 학습하지 않은 corridor 입니다: {corridor} (학습 대상: {self.units})")
-        issued_at = pd.Timestamp(issued_at).floor("h") if issued_at else storage.last_observation_ts(corridor)
+        last_obs = storage.last_observation_ts(corridor)
+        issued_at = pd.Timestamp(issued_at).floor("h") if issued_at else last_obs
         if issued_at is None:
             raise LookupError(f"{corridor}: 관측치가 없습니다")
+        if last_obs is None:
+            raise LookupError(f"{corridor}: 관측치가 없습니다")
+        if issued_at > last_obs:
+            raise LookupError(
+                f"{corridor}: issued_at({issued_at.strftime(storage.TS_FMT)})이 마지막 관측치(" \
+                f"{last_obs.strftime(storage.TS_FMT)}) 이후라 예측할 수 없습니다"
+            )
         hub = hub_of(corridor)
         H = self.spec.horizon
         start = issued_at - pd.Timedelta(weeks=history_weeks)
+
         frame = self.unit_frame(corridor, start, issued_at + pd.Timedelta(hours=H), known_cutoff=issued_at)
         w = make_windows({corridor: frame}, self.spec, issue_start=issued_at, issue_end=issued_at,
                          require_targets=False)
@@ -139,13 +149,31 @@ def _load_from_mlflow() -> LoadedModel:
     """MLflow Registry 에서 alias "production" 이 가리키는 버전 (재배포 시 서버 코드 수정 불필요)."""
     from serving_app.train_and_register import load_production
 
-    prod = load_production()
+    try:
+        prod = load_production()
+    except Exception as e:
+        uri = os.getenv("MLFLOW_TRACKING_URI")
+        hint = (
+            "MLflow Production 모델을 찾을 수 없습니다. "
+            "먼저 학습/등록을 수행하세요: `python serving_app/train_and_register.py`. "
+            "합성 데이터라면 `export TRAFFIC_DB=data/traffic_synthetic.db MLFLOW_TRACKING_URI=sqlite:///mlflow_synthetic.db` "
+            "설정도 확인하세요."
+        )
+        if uri:
+            hint += f" (현재 MLFLOW_TRACKING_URI={uri})"
+        raise ModelLoadError(hint) from e
     return LoadedModel(prod["model"], prod["preprocess"], version=f"v{prod['version']}")
 
 
 def _load_model() -> LoadedModel:
     if os.getenv("MODEL_SOURCE", "mlflow") == "local":
-        return _load_from_local()
+        try:
+            return _load_from_local()
+        except Exception as e:
+            raise ModelLoadError(
+                "로컬 모델을 로드하지 못했습니다. `scripts/train_local.py`로 모델을 생성했는지, "
+                f"파일이 존재하는지 확인하세요: {LOCAL_MODEL_PATH}, {LOCAL_PREPROCESS_PATH}"
+            ) from e
     return _load_from_mlflow()
 
 

@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from data import storage
 from data.config import corridors, hubs
 from data.features import make_windows
+from serving_app.errors import ModelLoadError
 from serving_app import model_loader
 from serving_app.monitoring.retrain_trigger import check_and_trigger
 from serving_app.schemas import (
@@ -36,7 +37,10 @@ def _log_forecast(fc: dict):
 
 @router.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
-    model = model_loader.get_model()
+    try:
+        model = model_loader.get_model()
+    except ModelLoadError as e:
+        raise HTTPException(503, str(e))
     if req.corridor:
         targets = [req.corridor]
     elif req.hub:
@@ -67,7 +71,10 @@ def batch_test(req: BatchTestRequest):
     값을 정답과 비교해 예측 기록에 쌓은 뒤 드리프트를 판정합니다.
     (발행 시각별로 공개된 일정만 쓰는 대신 학습과 같은 보수적 규칙을 적용합니다 - data/events.py)
     """
-    model = model_loader.get_model()
+    try:
+        model = model_loader.get_model()
+    except ModelLoadError as e:
+        raise HTTPException(503, str(e))
     if req.corridor not in model.units:
         raise HTTPException(404, f"모델이 학습하지 않은 corridor 입니다: {req.corridor}")
 
