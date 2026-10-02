@@ -29,7 +29,7 @@ _retrain_lock = threading.Lock()
 
 def check_alert_only(corridor: str) -> dict:
     """
-    운영용 관찰·판단 (POST /monitoring/check, sync_collected.sh 가 호출). 재학습은 절대 실행하지 않습니다 -
+    운영용 관찰·판단 (POST /monitoring/drift/check, sync_collected.sh 가 호출). 재학습은 절대 실행하지 않습니다 -
     on_drift 값과 무관하게 [WARN] 경보와 조기 재학습 "신청"(drift_state)만 하고, 재학습은 별도 프로세스가 맡습니다.
     같은 corridor·같은 날의 같은 로그는 1회만 남깁니다.
     """

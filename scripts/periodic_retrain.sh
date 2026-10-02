@@ -7,7 +7,7 @@
 #
 # 매시 도는 것은 "지금 해야 하나" 확인뿐이라 가볍습니다 (python -m serving_app.monitoring.retrain_schedule, TensorFlow 안 읽음).
 #   periodic    : 마지막 base-train/fine-tune 후 retrain.period_days(14일) 경과
-#   drift-early : sync_collected.sh 의 /monitoring/check 가 남긴 신청(logs/retrain_request.json) + 쿨다운(3일) 경과
+#   drift-early : sync_collected.sh 의 /monitoring/drift/check 가 남긴 신청(logs/retrain_request.json) + 쿨다운(3일) 경과
 # 실제 학습은 이 스크립트가 별도 프로세스로 실행합니다 (서버 요청 안에서 돌지 않음). 끝나면 /admin/reload 로
 # 서버의 모델 캐시를 비웁니다. 서버가 꺼져 있으면 건너뛰고, 다음 서버 기동 때 새 Production 을 읽습니다.
 # 기록: logs/aiops.log([INFO] retrain triggered → [OK]/[FAIL]), logs/retrain.log(이 스크립트의 실행 기록)

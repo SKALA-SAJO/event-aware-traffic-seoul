@@ -174,7 +174,7 @@ class DriftStateTests(unittest.TestCase):
 
 
 class CheckAlertOnlyTests(unittest.TestCase):
-    """운영 경로(/monitoring/check)의 판단: 경보 + 신청만 하고 재학습은 하지 않는다."""
+    """운영 경로(/monitoring/drift/check)의 판단: 경보 + 신청만 하고 재학습은 하지 않는다."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -354,6 +354,45 @@ class RetrainScheduleTests(unittest.TestCase):
         self.train_run(1, name="fine-tune")
         self.request(0.2)
         self.assertEqual(retrain_schedule.decide(self.NOW)[0], 1)
+
+
+class DriftCheckEndpointTests(unittest.TestCase):
+    """POST /monitoring/drift/check (팀 엔드포인트에 합침): on_drift 값에 따라 재학습 실행 여부가 갈린다."""
+
+    def call(self, on_drift):
+        from fastapi.testclient import TestClient
+
+        from serving_app.main import app
+        from serving_app.routers import health
+
+        alert_only = mock.Mock(return_value={"status": "drift_detected", "drift": {"ratio": 2.0, "n_hours": 48},
+                                             "consecutive_days": 1, "early_retrain": None})
+        trigger = mock.Mock(return_value={"status": "retrain_triggered", "drift": {"ratio": 2.0}, "promoted": True})
+        model = mock.Mock(version="7", units=["c1", "c2"])
+        with mock.patch.object(health.model_loader, "get_model", return_value=model), \
+                mock.patch.object(health, "check_alert_only", alert_only), \
+                mock.patch.object(health, "check_and_trigger", trigger), \
+                mock.patch.object(health, "section", lambda n: {"on_drift": on_drift}):
+            res = TestClient(app).post("/monitoring/drift/check")
+        return res, alert_only, trigger
+
+    def test_alert_mode_never_retrains_in_request(self):
+        res, alert_only, trigger = self.call("alert")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(alert_only.call_count, 2)  # corridor 마다 1회
+        trigger.assert_not_called()
+        body = res.json()
+        self.assertEqual(body["model_version"], "7")
+        self.assertEqual(body["drift"], ["c1", "c2"])
+        self.assertEqual(len(body["results"]), 2)
+        self.assertIn("early_retrain", body["results"][0])
+
+    def test_retrain_mode_keeps_demo_behaviour(self):
+        res, alert_only, trigger = self.call("retrain")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(trigger.call_count, 2)
+        alert_only.assert_not_called()
+        self.assertTrue(res.json()["results"][0]["promoted"])
 
 
 class AdminReloadTests(unittest.TestCase):
