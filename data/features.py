@@ -10,8 +10,10 @@
                                  → 공휴일·이벤트 일정처럼 "미리 알려진 미래 정보"
     target (HORIZON,)          : t+1 … t+HORIZON 시각의 통행속도 (거점별 표준화)
 
-교통량은 입력으로만 씁니다. 집회로 도로가 통제되면 통과 차량(교통량)은 줄지만 정체는
-심해지므로, 사용자에게 의미 있는 예측 대상은 속도(→ 소요시간)입니다.
+교통량은 선택 입력입니다 (설정 train.use_volume). 2026-10-02 에 기본을 끔으로 바꿨습니다 - 연결된 지점이 광화문
+A-17 하나뿐이고(2026-01~07 값 없음), 실시간 수집이 없어 운영에서는 항상 결측이라 학습과 운영 조건이 다르며,
+효과도 확인되지 않았습니다 (reports/experiments, 작업기록.md). 집회로 도로가 통제되면 통과 차량(교통량)은 줄지만
+정체는 심해지므로, 사용자에게 의미 있는 예측 대상은 속도(→ 소요시간)입니다.
 
 실험 ① 피처 단계 (STAGES)
     speed    : 속도만
@@ -43,6 +45,9 @@ class FeatureSpec:
     # 이벤트 피처에 쓰는 출처 (None = 전부). 이벤트 시간대 판정(is_event: 평가·드리프트 제외)은 출처와 무관하게
     # 모든 이벤트를 씀. 모델 메타데이터에 함께 저장되므로 서빙도 학습과 같은 출처만 피처로 씀.
     event_sources: list[str] | None = field(default_factory=lambda: section("train").get("event_sources"))
+    # 교통량 입력 사용 여부 (설정 train.use_volume). 이전 모델 메타데이터에는 이 값이 없고 그 모델들은 교통량을 썼으므로
+    # from_dict 는 없으면 True 로 읽는다 (설정을 바꿔도 이미 등록된 모델의 입력 차원이 바뀌지 않게).
+    use_volume: bool = field(default_factory=lambda: section("train").get("use_volume", True))
 
     def __post_init__(self):
         assert self.stage in STAGES, self.stage
@@ -52,11 +57,12 @@ class FeatureSpec:
 
     @property
     def key(self) -> str:
-        return self.stage if self.stage != "full" else f"full-{self.event_mode}"
+        key = self.stage if self.stage != "full" else f"full-{self.event_mode}"
+        return key if self.use_volume or self.stage == "speed" else f"{key}-novol"
 
     @property
     def uses_volume(self) -> bool:
-        return self.stage in ("volume", "calendar", "full")
+        return self.use_volume and self.stage in ("volume", "calendar", "full")
 
     @property
     def uses_calendar(self) -> bool:
@@ -86,6 +92,7 @@ class FeatureSpec:
         d = dict(d)
         if "hubs" in d:  # 거점 단위로 학습된 이전 모델 메타데이터 호환
             d["units"] = d.pop("hubs")
+        d.setdefault("use_volume", True)  # 교통량 옵션이 생기기 전에 학습된 모델은 교통량을 입력으로 썼다
         return cls(**d)
 
 
