@@ -1,2 +1,2 @@
 first_seen,last_seen,acc_id,link_id,corridor,hub,type_code,type_name,category,start,expected_end,info
-2026-10-03 00:01:00,2026-10-03 00:01:00,1102761,1000005100,gwanghwamun_up,gwanghwamun,A11,기타,event,2026-10-03 00:00:00,2026-10-03 17:00:00,도심 대규모 집회 관련 버스 무정차
+2026-10-03 00:01:00,2026-10-03 00:15:00,1102761,1000005100,gwanghwamun_up,gwanghwamun,A11,기타,event,2026-10-03 00:00:00,2026-10-03 17:00:00,도심 대규모 집회 관련 버스 무정차
