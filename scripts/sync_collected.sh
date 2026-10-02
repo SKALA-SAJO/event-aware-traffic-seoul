@@ -40,6 +40,9 @@ run() {
     code=$(curl -s -o /dev/null -w '%{http_code}' -m 120 -X POST "$API_URL/predict" \
       -H 'Content-Type: application/json' -d '{}')
     echo "예측 호출: HTTP $code"
+    # 방금 쌓인 예측 기록으로 드리프트 판정 → [WARN] 경보와 조기 재학습 신청만 기록 (재학습은 periodic_retrain.sh 가 별도로 실행)
+    code=$(curl -s -o /dev/null -w '%{http_code}' -m 120 -X POST "$API_URL/monitoring/check")
+    echo "드리프트 확인: HTTP $code"
   else
     echo "서버($API_URL) 꺼짐 - 예측 호출 건너뜀"
   fi

@@ -19,9 +19,10 @@ fine-tuning (fine_tune)
 실행:
     python scripts/generate_synthetic_data.py   # 또는 실데이터 적재
     python serving_app/train_and_register.py
-    python serving_app/train_and_register.py --fine-tune   # 주기적 재학습 (cron, retrain.period_days 마다)
+    python serving_app/train_and_register.py --fine-tune   # 재학습 (scripts/periodic_retrain.sh 가 period_days 경과·조기 재학습 신청 시 호출)
 """
 import json
+import logging
 import os
 import sys
 
@@ -136,6 +137,23 @@ def load_production() -> dict:
     }
 
 
+def retrain_window(rcfg: dict, db_path: str | None = None):
+    """
+    재학습용 데이터의 출처·구간. 설정의 exclude_sources 를 뺀 확정 실측만 쓰고(시뮬레이션 주입분은 드리프트 신호로만 씀),
+    데이터 끝 시각도 같은 기준으로 잡아야 학습·평가 구간이 시뮬레이션 때문에 비지 않는다.
+    반환: (제외 출처, 끝 시각, 학습 시작, 평가 시작)
+    """
+    from data import storage
+
+    exclude = tuple(rcfg.get("exclude_sources") or ())
+    end = storage.last_observation_ts(exclude_sources=exclude, db_path=db_path)
+    if end is None:
+        raise ValueError(f"재학습에 쓸 관측치가 없습니다 (제외 출처: {exclude or '-'})")
+    ft_start = end - pd.Timedelta(days=rcfg["fine_tune_days"])
+    eval_start = end - pd.Timedelta(days=rcfg["eval_days"]) - pd.Timedelta(hours=HORIZON)
+    return exclude, end, ft_start, eval_start
+
+
 def fine_tune(reason: str = "", seed: int | None = None) -> dict:
     """Production 가중치에서 이어서 최근 데이터로 학습 → 게이트 재검증 → 통과 시 승격."""
     rcfg = section("retrain")
@@ -145,13 +163,9 @@ def fine_tune(reason: str = "", seed: int | None = None) -> dict:
     spec, ref_spec = FeatureSpec.from_dict(pre["spec"]), FeatureSpec.from_dict(pre["ref_spec"])
     scaler = TrafficScaler.from_dict(pre["scaler"])
 
-    from data import storage
-
-    end = storage.last_observation_ts()
-    ft_start = end - pd.Timedelta(days=rcfg["fine_tune_days"])
-    eval_start = end - pd.Timedelta(days=rcfg["eval_days"]) - pd.Timedelta(hours=HORIZON)
+    exclude, end, ft_start, eval_start = retrain_window(rcfg)
     hist_start = ft_start - pd.Timedelta(hours=spec.lookback + 24 * 7 * 8)  # 입력 윈도우 + 결측 보정용 이력
-    obs, events = T.load_data(start=hist_start, exclude_sources=())  # 운영 중 들어온 최신 데이터 전부
+    obs, events = T.load_data(start=hist_start, exclude_sources=exclude)
     frames = build_frames(obs, events, spec, scaler)
 
     def win(s, e, sp):
@@ -161,6 +175,9 @@ def fine_tune(reason: str = "", seed: int | None = None) -> dict:
     w_tr, w_ev = win(ft_start, train_end, spec), win(eval_start, None, spec)
     wr_tr, wr_ev = win(ft_start, train_end, ref_spec), win(eval_start, None, ref_spec)
     weights = T.recency_weights(w_tr.issued_at, rcfg["recency_half_life_days"])
+    logging.getLogger("aiops").info(
+        f"[INFO] retrain data: sources={T.data_source(exclude) or '-'} excluded={','.join(exclude) or '-'} "
+        f"range={ft_start:%Y-%m-%d %H:%M}~{end:%Y-%m-%d %H:%M} n_train={len(w_tr)} n_eval={len(w_ev)}")
 
     m_prod = T.metrics(T.predict_speed(prod["model"], w_ev, scaler), w_ev)
     with mlflow.start_run(run_name="fine-tune") as run:
@@ -174,19 +191,58 @@ def fine_tune(reason: str = "", seed: int | None = None) -> dict:
             "mode": "fine-tune", "parent_version": prod["version"], "reason": reason[:250],
             "epochs": rcfg["epochs"], "lr": rcfg["lr"], "fine_tune_days": rcfg["fine_tune_days"],
             "n_train": len(w_tr), "n_eval": len(w_ev), "data_end": str(end),
+            "exclude_sources": ",".join(exclude) or "-", "train_sources": T.data_source(exclude) or "-",
         })
         mlflow.log_metrics({**_flat("cand", m), **_flat("noevent", m_ref), **_flat("production", m_prod)})
         preprocess = {**pre, "data_end": str(end), "parent_version": prod["version"]}
         result = _log_and_register(model, ref_model, preprocess, gates, run.info.run_id)
+        result["data_end"], result["n_train"], result["n_eval"] = str(end), len(w_tr), len(w_ev)
+        result["exclude_sources"] = list(exclude)
         result["production_rmse_normal"] = m_prod["rmse_normal"]
         result["parent_version"] = prod["version"]
         return result
 
 
+def _attach_aiops_log() -> logging.Logger:
+    """CLI 프로세스에서도 서버(main.py)와 같은 logs/aiops.log 에 기록 - 대시보드 "재학습 로그"에 보이게."""
+    logger = logging.getLogger("aiops")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        os.makedirs("logs", exist_ok=True)
+        handler = logging.FileHandler(os.path.join("logs", "aiops.log"), encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        logger.addHandler(handler)
+        logger.addHandler(logging.StreamHandler())
+    return logger
+
+
+def _arg(name: str, default: str) -> str:
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv and sys.argv.index(name) + 1 < len(sys.argv) else default
+
+
 if __name__ == "__main__":
     if "--fine-tune" in sys.argv:
-        r = fine_tune(reason="periodic")
-        print(f"[{'OK' if r['promoted'] else 'FAIL'}] periodic fine-tune rmse_normal={r['rmse_normal']:.2f} "
+        # --mode periodic | drift-early (scripts/periodic_retrain.sh 가 retrain_schedule 결과를 넘김), --reason 사유
+        logger = _attach_aiops_log()
+        mode, reason = _arg("--mode", "periodic"), _arg("--reason", "")
+        parent = load_production()["version"]
+        logger.info(f"[INFO] retrain triggered (mode={mode}, window=last_{section('retrain')['fine_tune_days']}_days, parent=v{parent})")
+        try:
+            r = fine_tune(reason=f"{mode}: {reason}".strip(": "))
+        except Exception as e:
+            logger.error(f"[FAIL] fine-tune error: {e} - keep production v{parent}")
+            raise
+        finally:
+            from serving_app.monitoring.drift_state import clear_request
+            clear_request()  # 실행했으면 신청은 처리된 것 (실패해도 쿨다운이 반복 재시도를 막음)
+        if r["promoted"]:
+            logger.info(f"[OK] new_rmse={r['rmse_normal']:.2f} (production was {r['production_rmse_normal']:.2f}) "
+                        f"- production promoted: {MODEL_NAME} v{r['version']}")
+        else:
+            g = r["gates"]
+            failed = [k for k in ("gate1_normal", "gate2_event", "gate3_not_worse") if g.get(k) and g[k]["passed"] is False]
+            logger.warning(f"[FAIL] gate failed {failed} - keep production v{parent}")
+        print(f"[{'OK' if r['promoted'] else 'FAIL'}] {mode} fine-tune rmse_normal={r['rmse_normal']:.2f} "
               f"(production {r['production_rmse_normal']:.2f}) promoted={r['promoted']} version={r.get('version')}")
     else:
         train_and_register()

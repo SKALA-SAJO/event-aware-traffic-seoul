@@ -38,10 +38,12 @@ def load_data(start=None, end=None, exclude_sources: tuple = DEFAULT_EXCLUDE):
             storage.load_events(start=start, end=end, exclude_sources=events_exclude))
 
 
-def data_source() -> str:
+def data_source(exclude: tuple = ("simulation", "topis_history")) -> str:
     """관측치 출처 요약 - 합성 데이터로 낸 결과임을 리포트·MLflow 에 남기기 위함."""
+    q = "SELECT DISTINCT source FROM observations" + (
+        f" WHERE source NOT IN ({','.join('?' * len(exclude))})" if exclude else "")
     with storage.connect() as conn:
-        rows = conn.execute("SELECT DISTINCT source FROM observations WHERE source NOT IN ('simulation', 'topis_history')").fetchall()
+        rows = conn.execute(q, list(exclude)).fetchall()
     return ",".join(sorted(r[0] for r in rows if r[0]))
 
 
