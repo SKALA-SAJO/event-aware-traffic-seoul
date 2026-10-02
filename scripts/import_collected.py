@@ -108,10 +108,14 @@ def _ready(done, hours: int) -> bool:
 def _import_rest(read) -> None:
     inc = read("incidents")
     if not inc.empty:
-        inc["collected_at"] = pd.to_datetime(inc["collected_at"])
-        last = inc.sort_values("collected_at").groupby("acc_id").tail(1)
+        # 돌발 한 줄 형식(last_seen)과 15분마다 줄이 쌓이던 예전 형식(collected_at)을 함께 읽음
+        seen = inc["last_seen"] if "last_seen" in inc else pd.Series(None, index=inc.index, dtype=object)
+        if "collected_at" in inc:
+            seen = seen.fillna(inc["collected_at"])
+        inc["last_seen"] = pd.to_datetime(seen)
+        last = inc.sort_values("last_seen").groupby("acc_id").tail(1)
         last = last.astype(object).where(last.notna(), None)
-        rows = [{**r, "last_seen": r["collected_at"], "source": "api"} for r in last.to_dict("records")]
+        rows = [{**r, "source": "api"} for r in last.to_dict("records")]
         print(f"돌발: {storage.upsert_incidents(rows)}건")
 
     rl = read("rallies")

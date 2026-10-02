@@ -7,8 +7,11 @@
                                         (corridor·segment 는 사람이 읽기 위한 열: 예 gwanghwamun_up, 세종대로 광화문→세종대로사거리.
                                          링크 대응표는 main 브랜치 config/corridor_links.yaml. 열이 3개뿐인 예전 파일은
                                          다음 수집 때 두 열을 채워 5열로 바꿈)
-    collected/incidents/YYYY-MM-DD.csv  collected_at, acc_id, link_id, corridor, hub, type_code, type_name,
+    collected/incidents/YYYY-MM-DD.csv  first_seen, last_seen, acc_id, link_id, corridor, hub, type_code, type_name,
                                         category, start, expected_end, info
+                                        (돌발 하나당 한 줄. 같은 돌발이 다시 보이면 줄을 더하지 않고 last_seen 과 내용만
+                                         갱신 - 해제 시각은 "마지막으로 보인 시각"으로 판단. 15분마다 같은 줄이 쌓이던
+                                         예전 형식(collected_at) 파일은 다음 수집 때 한 줄씩으로 합쳐 바꿈)
 
 DB 를 쓰지 않고 CSV 에만 쌓습니다 (Actions 러너는 매번 새로 켜지므로). 노트북에서
 scripts/import_collected.py 가 링크별 1시간 평균을 내 DB 에 넣습니다.
@@ -35,7 +38,7 @@ REQUEST_TIMEOUT = float(os.getenv("SNAPSHOT_TIMEOUT", "8"))  # 팀 기본값 20�
 WORKERS = 8
 
 SPEED_COLS = ["collected_at", "link_id", "speed", "corridor", "segment"]
-INC_COLS = ["collected_at", "acc_id", "link_id", "corridor", "hub", "type_code", "type_name",
+INC_COLS = ["first_seen", "last_seen", "acc_id", "link_id", "corridor", "hub", "type_code", "type_name",
             "category", "start", "expected_end", "info"]
 
 
@@ -50,6 +53,29 @@ def _append(path: str, cols: list[str], rows: list[dict]) -> None:
         if new:
             w.writeheader()
         w.writerows(rows)
+
+
+def _merge_incidents(path: str, rows: list[dict], now: str) -> None:
+    """돌발을 acc_id 당 한 줄로 유지: 새 돌발은 추가, 이미 있으면 last_seen·내용(예정 종료 등)만 갱신."""
+    old = []
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            old = list(csv.DictReader(f))
+    merged: dict[str, dict] = {}
+    for r in old:  # 예전 형식(collected_at 한 줄씩)도 여기서 first_seen·last_seen 으로 합쳐짐
+        seen = r.get("last_seen") or r.get("collected_at")
+        first = r.get("first_seen") or r.get("collected_at")
+        prev = merged.get(r["acc_id"])
+        merged[r["acc_id"]] = {**r, "first_seen": min(first, prev["first_seen"]) if prev else first,
+                               "last_seen": max(seen, prev["last_seen"]) if prev else seen}
+    for r in rows:
+        prev = merged.get(str(r["acc_id"]))
+        merged[str(r["acc_id"])] = {**r, "first_seen": prev["first_seen"] if prev else now, "last_seen": now}
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=INC_COLS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(sorted(merged.values(), key=lambda r: (r["first_seen"], str(r["acc_id"]))))
 
 
 def _upgrade_speed_file(path: str, where: dict) -> None:
@@ -114,11 +140,11 @@ def main():
         for r in seoul_api.incidents():
             cid = link_map.get(str(r.get("link_id")))
             if cid:
-                inc.append({**r, "collected_at": now, "corridor": cid, "hub": cfg[cid]["hub"]})
+                inc.append({**r, "corridor": cid, "hub": cfg[cid]["hub"]})
     except Exception as e:
         print(f"  incidents: {e}")
     if inc:
-        _append(os.path.join(args.out, "incidents", f"{day}.csv"), INC_COLS, inc)
+        _merge_incidents(os.path.join(args.out, "incidents", f"{day}.csv"), inc, now)
 
     print(f"{now} speed {len(speed)}/{len(speed) + failed} links, incidents {len(inc)}")
     if not speed:
