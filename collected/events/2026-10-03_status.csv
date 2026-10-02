@@ -1,0 +1,4 @@
+fetched_at,source,hub,type,title,start,end,expected_size,announced_at,status,status_changed_at,external_id,venue,lat,lon,end_estimated,runtime_text,description
+2026-10-03 00:01:00,kbo_schedule,jamsil,sports,KBO KIA vs LG,2026-10-03 14:00:00,2026-10-03 17:10:00,23750,2026-09-26,scheduled,,,,,,,,잠실야구장 KBO KIA vs LG
+2026-10-03 00:01:00,kbo_schedule,jamsil,sports,KBO KIA vs LG,2026-10-04 14:00:00,2026-10-04 17:10:00,23750,2026-09-27,scheduled,,,,,,,,잠실야구장 KBO KIA vs LG
+2026-10-03 00:01:00,kbo_schedule,jamsil,sports,KBO KIA vs LG,2026-10-05 14:00:00,2026-10-05 17:10:00,23750,2026-09-28,scheduled,,,,,,,,잠실야구장 KBO KIA vs LG
