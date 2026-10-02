@@ -149,7 +149,7 @@ python serving_app/train_and_register.py --fine-tune              # 14일마다
 | `collect_events.yml` | 매일 19:30 | 앞으로 90일 KOPIS·KBO·K리그 일정 → `collected/events/` (일정마다 처음 보인 날 = 실제 공개 시점) |
 
 - 준비: 저장소 Settings → Secrets 에 `SEOUL_API_KEY`, `KOPIS_API_KEY`
-- `collected/speed/` 열: `collected_at, link_id, speed, corridor, segment` (예: `gwanghwamun_up`, `세종대로 광화문→세종대로사거리`). 2026-10-02 까지의 파일은 앞 3개 열만 있음. 링크 대응표 전체는 main 브랜치의 `config/corridor_links.yaml` (`data-collect` 브랜치에는 `collected/` 만 있음)
+- `collected/speed/` 열: `collected_at, link_id, speed, corridor, segment` (예: `gwanghwamun_up`, `세종대로 광화문→세종대로사거리`). 열이 3개뿐인 예전 파일은 다음 수집 때 자동으로 5열로 바뀜. 링크 대응표 전체는 main 브랜치의 `config/corridor_links.yaml` (`data-collect` 브랜치에는 `collected/` 만 있음)
 - 실행: GitHub 예약 실행(schedule)은 자주 늦거나 빠져서(10-01 21시~10-02 08시에 1회만 실행), cron-job.org 가
   같은 주기로 `POST /repos/SKALA-SAJO/event-aware-traffic-seoul/actions/workflows/<파일>/dispatches` (`{"ref":"main"}`,
   Actions Read and write 권한만 있는 fine-grained 토큰)를 호출해 실행합니다. 워크플로의 schedule 은 보조로 남겨 둠

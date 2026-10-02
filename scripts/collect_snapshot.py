@@ -5,7 +5,8 @@
 
     collected/speed/YYYY-MM-DD.csv      collected_at, link_id, speed, corridor, segment
                                         (corridor·segment 는 사람이 읽기 위한 열: 예 gwanghwamun_up, 세종대로 광화문→세종대로사거리.
-                                         링크 대응표는 main 브랜치 config/corridor_links.yaml. 2026-10-02 까지의 파일은 앞 3개 열만 있음)
+                                         링크 대응표는 main 브랜치 config/corridor_links.yaml. 열이 3개뿐인 예전 파일은
+                                         다음 수집 때 두 열을 채워 5열로 바꿈)
     collected/incidents/YYYY-MM-DD.csv  collected_at, acc_id, link_id, corridor, hub, type_code, type_name,
                                         category, start, expected_end, info
 
@@ -51,6 +52,23 @@ def _append(path: str, cols: list[str], rows: list[dict]) -> None:
         w.writerows(rows)
 
 
+def _upgrade_speed_file(path: str, where: dict) -> None:
+    """corridor·segment 열이 없던 예전 속도 파일이면, 기존 줄에도 두 열을 채워 새 열 구성으로 바꿔 쓴다."""
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+        header = rows and list(rows[0].keys())
+    if not rows or header == SPEED_COLS:
+        return
+    for r in rows:
+        r["corridor"], r["segment"] = where.get(str(r["link_id"]), ("", ""))
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=SPEED_COLS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="collected")
@@ -86,7 +104,9 @@ def main():
         else:
             failed += 1
             print(f"  link {link_id}: {err}")
-    _append(os.path.join(args.out, "speed", f"{day}.csv"), SPEED_COLS, speed)
+    speed_path = os.path.join(args.out, "speed", f"{day}.csv")
+    _upgrade_speed_file(speed_path, where)
+    _append(speed_path, SPEED_COLS, speed)
 
     link_map = {str(link["link_id"]): cid for cid, c in cfg.items() for link in c.get("links") or []}
     inc = []
