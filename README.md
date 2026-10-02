@@ -145,7 +145,7 @@ python serving_app/train_and_register.py --fine-tune              # 14일마다
 
 | 워크플로 | 주기 | 내용 → `data-collect` 브랜치 |
 |---|---|---|
-| `collect_realtime.yml` | 30분 | 구간 링크 현재 속도(`TrafficInfo`) + 구간에 걸린 돌발(`AccInfo`) → `collected/speed/`, `incidents/` |
+| `collect_realtime.yml` | 15분 | 구간 링크 현재 속도(`TrafficInfo`) + 구간에 걸린 돌발(`AccInfo`) → `collected/speed/`, `incidents/` |
 | `collect_events.yml` | 매일 19:30 | 앞으로 90일 KOPIS·KBO·K리그 일정 → `collected/events/` (일정마다 처음 보인 날 = 실제 공개 시점) |
 
 - 준비: 저장소 Settings → Secrets 에 `SEOUL_API_KEY`, `KOPIS_API_KEY`
@@ -247,7 +247,7 @@ MAE·RMSE 를 전체/평상/이벤트, corridor 별로 보고하고, 비교 기�
 ## 남은 과제
 
 **운영 전환 시 필수**
-- 실시간 수집은 GitHub Actions 로 동작 중(30분 간격 → 시간 평균, "실시간 수집" 참고). 남은 것: `import_collected.py` 매시 실행 환경
+- 실시간 수집은 동작 중(cron-job.org → GitHub Actions, 15분 간격 → 시간 평균), DB 반영은 맥 자동 반영(`scripts/sync_collected.sh`)으로 매시 실행 ("실시간 수집" 참고)
 - 경찰청 집회 매일 자동 수집 (팀 저장소의 `fetch_smpa_rallies.py`·`parse_smpa_rallies.py` 이식). 없으면 운영 중 집회 피처가 0 으로 들어감
 - 14일 주기 재학습 cron (`train_and_register.py --fine-tune`)
 

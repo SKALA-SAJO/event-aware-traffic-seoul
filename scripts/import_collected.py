@@ -54,6 +54,7 @@ def _read_dir(root: str, kind: str) -> pd.DataFrame:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default=None, help="브랜치 대신 로컬 폴더에서 읽기")
+    # 2: 15분 간격(최대 4회)에서 일부가 빠져도 반영하고, 30분 간격 시절 시간대(2회)도 그대로 반영되도록
     ap.add_argument("--min-snapshots", type=int, default=2, help="시간대별 최소 스냅숏 수 (15분 간격이면 최대 4)")
     ap.add_argument("--require-hours", type=int, default=0, help="처음 반영 전 최근 N시간이 모두 차 있어야 함 (0=검사 안 함)")
     args = ap.parse_args()
