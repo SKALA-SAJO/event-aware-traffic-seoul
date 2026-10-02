@@ -3,7 +3,9 @@
 
     SEOUL_API_KEY=... python scripts/collect_snapshot.py --out collected
 
-    collected/speed/YYYY-MM-DD.csv      collected_at, link_id, speed
+    collected/speed/YYYY-MM-DD.csv      collected_at, link_id, speed, corridor, segment
+                                        (corridor·segment 는 사람이 읽기 위한 열: 예 gwanghwamun_up, 세종대로 광화문→세종대로사거리.
+                                         링크 대응표는 main 브랜치 config/corridor_links.yaml. 2026-10-02 까지의 파일은 앞 3개 열만 있음)
     collected/incidents/YYYY-MM-DD.csv  collected_at, acc_id, link_id, corridor, hub, type_code, type_name,
                                         category, start, expected_end, info
 
@@ -31,7 +33,7 @@ from data.config import corridors
 REQUEST_TIMEOUT = float(os.getenv("SNAPSHOT_TIMEOUT", "8"))  # 팀 기본값 20초는 수집용으로 너무 김
 WORKERS = 8
 
-SPEED_COLS = ["collected_at", "link_id", "speed"]
+SPEED_COLS = ["collected_at", "link_id", "speed", "corridor", "segment"]
 INC_COLS = ["collected_at", "acc_id", "link_id", "corridor", "hub", "type_code", "type_name",
             "category", "start", "expected_end", "info"]
 
@@ -39,6 +41,9 @@ INC_COLS = ["collected_at", "acc_id", "link_id", "corridor", "hub", "type_code",
 def _append(path: str, cols: list[str], rows: list[dict]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     new = not os.path.exists(path)
+    if not new:  # 열 구성이 바뀌기 전에 만든 파일은 원래 열 그대로 이어 씀 (한 파일 안에서 열 개수가 섞이지 않게)
+        with open(path, encoding="utf-8") as f:
+            cols = next(csv.reader(f), cols)
     with open(path, "a", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         if new:
@@ -57,6 +62,8 @@ def main():
 
     seoul_api.TIMEOUT = REQUEST_TIMEOUT
     links = [str(link["link_id"]) for c in cfg.values() for link in c.get("links") or []]
+    where = {str(link["link_id"]): (cid, f"{c['name'].split()[0]} {link.get('st')}→{link.get('ed')}")
+             for cid, c in cfg.items() for link in c.get("links") or []}
 
     def fetch(link_id):
         try:
@@ -74,7 +81,8 @@ def main():
     speed, failed = [], 0
     for link_id, v, err in results:
         if err is None:
-            speed.append({"collected_at": now, "link_id": link_id, "speed": v})
+            speed.append({"collected_at": now, "link_id": link_id, "speed": v,
+                          "corridor": where[link_id][0], "segment": where[link_id][1]})
         else:
             failed += 1
             print(f"  link {link_id}: {err}")
