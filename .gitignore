@@ -55,3 +55,10 @@ collected/
 .env
 .env.*
 !.env.example
+
+# 파생 데이터 (LLM 구조화 결과 등, 스크립트로 재생성)
+data/derived/
+
+# 임시 학습 DB·로그
+mlflow_dev.db
+logs/

@@ -297,20 +297,24 @@ def run_unit_comparison(runner: Runner, seeds: list[int]) -> pd.DataFrame:
 # ───────────────────────────────── 실험 ⑤ ─────────────────────────────────
 
 _SPORTS = ("kbo_schedule", "kleague_schedule", "csv", "manual")
+_RALLY = _SPORTS + ("smpa",)
 SOURCE_SETS = {  # 이름 → 학습에 쓸 이벤트 고르기 (None = 전부)
     "sports": lambda e: e["source"].isin(_SPORTS),
-    "sports+kopis10k": lambda e: e["source"].isin(_SPORTS) | ((e["source"] == "kopis") & (e["expected_size"] >= 10_000)),
-    "sports+kopis": lambda e: e["source"].isin(_SPORTS + ("kopis",)),
-    "sports+kopis+culture": None,
+    "sports+rally": lambda e: e["source"].isin(_RALLY),
+    "sports+rally+notice": lambda e: e["source"].isin(_RALLY + ("topis_notice",)),
+    "sports+rally+kopis10k": lambda e: e["source"].isin(_RALLY) | ((e["source"] == "kopis") & (e["expected_size"] >= 10_000)),
+    "all": None,
 }
-SOURCE_LABELS = {"calendar": "이벤트 정보 없음", "sports": "경기 (KBO·K리그)",
-                 "sports+kopis10k": "경기 + KOPIS 1만 석 이상 공연장", "sports+kopis": "경기 + KOPIS 공연 (3천 석 이상)",
-                 "sports+kopis+culture": "경기 + KOPIS + 서울시 문화행사"}
+SOURCE_LABELS = {"calendar": "이벤트 정보 없음", "sports": "경기·A매치 (KBO·K리그·수작업)",
+                 "sports+rally": "경기 + 집회", "sports+rally+notice": "경기 + 집회 + TOPIS 통제 공지 행사",
+                 "sports+rally+kopis10k": "경기 + 집회 + KOPIS 1만 석 이상", "all": "전부 (+ KOPIS 3천 석 이상 · 서울시 문화행사)"}
 
 
 def run_source_comparison(obs, events, seeds: list[int], epochs: int) -> pd.DataFrame:
     print("[실험 ⑤] 이벤트 데이터 출처")
-    spec = FeatureSpec(corridor_ids(), "full", section("train")["event_mode"])
+    # event_sources=None: 설정(train.event_sources)의 출처 필터를 끄고, 아래에서 고른 이벤트(events 인자)만으로 비교한다
+    # (필터가 켜져 있으면 세트마다 이벤트를 달리해도 설정에 없는 출처는 조용히 무시됨)
+    spec = FeatureSpec(corridor_ids(), "full", section("train")["event_mode"], event_sources=None)
     full = Runner(obs, events, epochs, use_mlflow=False)
     mask = {u: f["is_event"] for u, f in full.frames_for(spec).items()}
     rows = [{"config": "naive", "seed": 0, **full.naive()}]
