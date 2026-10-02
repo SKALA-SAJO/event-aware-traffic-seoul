@@ -938,10 +938,11 @@ async function loadDrift() {
 const INC_KO = { accident: "사고", construction: "공사", control: "통제", event: "행사·집회", other: "기타" };
 async function loadIncidents() {
   try {
-    const st = await api("/data/status");
-    const ends = st.corridors.map((c) => c.end).sort();
-    const until = ends.length ? ends[0].replace(" ", "T") : new Date().toISOString().slice(0, 19);
-    const since = new Date(new Date(until).getTime() - 7 * 864e5).toISOString().slice(0, 19);
+    // 돌발은 실시간 수집분(관측 반영 전에도 들어옴)이라 마지막 관측이 아니라 지금 기준 최근 7일 (시각은 DB 와 같은 현지 시각)
+    const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 19);
+    const now = new Date();
+    const until = local(now);
+    const since = local(new Date(now.getTime() - 7 * 864e5));
     const rows = (await api(`/incidents?start=${since}&end=${until}&limit=30`)).reverse();
     $("#incident-body").innerHTML = rows.length ? rows.map((r) => `<tr><td>${esc(corrName(r.corridor) || r.hub)}</td>
       <td><span class="badge">${INC_KO[r.category] ?? r.category}</span></td><td>${esc(r.info ?? "")}</td>
