@@ -4,6 +4,7 @@ GitHub Actions 가 15분마다 쌓은 스냅숏(data-collect 브랜치) → 링�
     git fetch origin data-collect
     python scripts/import_collected.py                         # origin/data-collect 브랜치에서 바로 읽음
     python scripts/import_collected.py --dir collected         # 로컬 폴더에서 읽기 (collect_snapshot.py --out)
+    python scripts/import_collected.py --require-hours 24      # 자동 실행용 (scripts/sync_collected.sh)
 
     속도  : collected_at 을 시간대(HH:00)로 내려 링크별 평균 → link_speed(source=api)
             한 시간대에 스냅숏이 min_snapshots 개 미만이면 건너뜀 (아직 수집 중인 시간대·누락 대비)
@@ -12,6 +13,11 @@ GitHub Actions 가 15분마다 쌓은 스냅숏(data-collect 브랜치) → 링�
             announced_at = min(수집기의 가정값, 처음 보인 시각) - 실제로 먼저 보였으면 그 시각이 근거가 됨.
             취소는 처음 '취소'로 보인 시각을 status_changed_at 으로 (수집기 가정값보다 늦으면 이쪽을 씀)
 다시 실행해도 같은 시간대는 덮어쓰므로 중복되지 않습니다.
+
+--require-hours N : 실시간 속도가 아직 DB 에 한 번도 안 들어갔으면, 수집분의 최근 N시간이 모두 차 있을 때만 넣습니다.
+    너무 일찍 넣으면 '마지막 관측 시각'이 지금으로 바뀌는데 그 앞이 비어 있어 기본(최신) 예측이 실패하기 때문.
+    한 번 들어간 뒤에는 중간에 몇 시간 빠져도 그대로 넣습니다 (수집 누락 때문에 반영이 멈추지 않도록).
+    돌발·이벤트는 마지막 관측 시각과 무관하므로 항상 넣습니다.
 """
 import argparse
 import io
@@ -49,6 +55,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default=None, help="브랜치 대신 로컬 폴더에서 읽기")
     ap.add_argument("--min-snapshots", type=int, default=2, help="시간대별 최소 스냅숏 수 (15분 간격이면 최대 4)")
+    ap.add_argument("--require-hours", type=int, default=0, help="처음 반영 전 최근 N시간이 모두 차 있어야 함 (0=검사 안 함)")
     args = ap.parse_args()
     read = (lambda k: _read_dir(args.dir, k)) if args.dir else _read_branch
 
@@ -61,6 +68,9 @@ def main():
     sp["ts"] = sp["collected_at"].dt.floor("h")
     n_snap = sp.groupby("ts")["collected_at"].nunique()
     done = n_snap[n_snap >= args.min_snapshots].index
+    if args.require_hours and not _live_started() and not _ready(done, args.require_hours):
+        _import_rest(read)
+        return
     hourly = (sp[sp["ts"].isin(done) & (sp["speed"] > 0)]
               .groupby(["link_id", "ts"], as_index=False)["speed"].mean())
     n = storage.upsert_link_speed(hourly, source="api")
@@ -69,6 +79,30 @@ def main():
     print(f"속도: 스냅숏 {sp['collected_at'].nunique()}회 → {len(done)}개 시간대({lo} ~ {hi}) "
           f"link_speed {n}행 → observations {n_obs}행  (스냅숏 {args.min_snapshots}회 미만 시간대 {len(n_snap) - len(done)}개 보류)")
 
+    _import_rest(read)
+
+
+def _live_started() -> bool:
+    """실시간 속도(source=api)가 DB 에 이미 들어간 적이 있는지."""
+    with storage.connect() as conn:
+        return conn.execute("SELECT 1 FROM observations WHERE source = 'api' LIMIT 1").fetchone() is not None
+
+
+def _ready(done, hours: int) -> bool:
+    if len(done) == 0:
+        print("속도: 완성된 시간대가 아직 없음 - 반영 보류")
+        return False
+    have = pd.DatetimeIndex(done)
+    need = pd.date_range(have.max() - pd.Timedelta(hours=hours - 1), have.max(), freq="h")
+    missing = need.difference(have)
+    if len(missing):
+        print(f"속도: 최근 {hours}시간 중 {len(missing)}시간이 비어 있어 첫 반영 보류 "
+              f"(빈 시간 {missing.min():%m-%d %H시} ~ {missing.max():%m-%d %H시})")
+        return False
+    return True
+
+
+def _import_rest(read) -> None:
     inc = read("incidents")
     if not inc.empty:
         inc["collected_at"] = pd.to_datetime(inc["collected_at"])
@@ -76,7 +110,6 @@ def main():
         last = last.astype(object).where(last.notna(), None)
         rows = [{**r, "last_seen": r["collected_at"], "source": "api"} for r in last.to_dict("records")]
         print(f"돌발: {storage.upsert_incidents(rows)}건")
-
 
     ev = read("events")
     if not ev.empty:
