@@ -59,8 +59,23 @@ retrain:
   # 원인 모를 일시 정체 구간에 맞춰져 평상 RMSE 가 나빠짐(1.72/1.76) → 14일 주기 재학습(1.66)이 가장 좋음.
   # alert: 알림만(원인 표기) + 주기적 fine-tuning  /  retrain: 감지 즉시 fine-tuning (시연용)
   on_drift: alert
-  period_days: 14           # train_and_register.py --fine-tune 을 이 주기로 cron 실행
+  period_days: 14           # 마지막 base-train/fine-tune 후 이 일수가 지나면 scripts/periodic_retrain.sh 가 fine-tune 실행
+  # 감지 기반 조기 재학습 (on_drift: alert 일 때만) - 기본 꺼짐. 오프라인 평가(scripts/eval_early_retrain.py,
+  # reports/early_retrain/report.md, 75일 walk-forward·시드 3개)에서 켜면 14일 주기보다 평상 RMSE 가 3시드 모두 나빴음
+  # (C안 1.531 vs 주기 1.512, 게이트 있이 1.527 vs 1.508). 켜려면 enabled: true 와 아래 값(검증 전 초안)을 쓰세요.
+  # 켜면: 같은 corridor 가 연속 N일 감지(또는 최근 공사 + 감지)될 때 재학습을 "신청"하고, 마지막 학습 후 cooldown 이
+  # 지나면 별도 프로세스(scripts/periodic_retrain.sh)가 실행합니다. 꺼져 있어도 경보·감지 기록·14일 주기는 동작합니다.
+  early:
+    enabled: false
+    consecutive_days: 2          # 같은 corridor 가 달력상 연속 N일 감지
+    recent_construction_days: 14 # 판정 구간 끝 기준 최근 N일 안에 시작한 공사가 있으면 1일 감지로도 신청
+    cooldown_days: 3             # 마지막 base-train/fine-tune 후 이 일수가 지나야 실행 (게이트 탈락도 포함)
+    request_expire_days: 7       # 신청 후 이 일수가 지나도 실행 못 하면 만료
   fine_tune_days: 14
+  # 신호용 / 재학습용 데이터 분리: 드리프트 판정(신호)은 predictions 와 도착한 실측을 쓰고, 재학습·게이트 평가는
+  # 아래 출처를 뺀 "확정된 실측"만 씁니다. simulation(batch-test 주입)은 경보를 울리는 신호로만 쓰고 학습에 넣지 않습니다.
+  # 시연에서 "구조 변화 → 재학습 → 승격"을 보여줄 때만 목록에서 simulation 을 빼세요 (발표에서 시연용 설정으로 표시).
+  exclude_sources: [simulation, topis_history, synthetic]
   eval_days: 1
   recency_half_life_days: 3
   epochs: 10

@@ -253,12 +253,17 @@ def observation_summary(db_path: str | None = None) -> list[dict]:
         ]
 
 
-def last_observation_ts(corridor: str | None = None, db_path: str | None = None) -> pd.Timestamp | None:
+def last_observation_ts(corridor: str | None = None, db_path: str | None = None,
+                        exclude_sources: tuple = ()) -> pd.Timestamp | None:
+    query, params = "SELECT MAX(ts) FROM observations WHERE 1=1", []
+    if corridor:
+        query += " AND corridor = ?"
+        params.append(corridor)
+    if exclude_sources:
+        query += f" AND source NOT IN ({','.join('?' * len(exclude_sources))})"
+        params += list(exclude_sources)
     with connect(db_path) as conn:
-        if corridor:
-            row = conn.execute("SELECT MAX(ts) FROM observations WHERE corridor = ?", (corridor,)).fetchone()
-        else:
-            row = conn.execute("SELECT MAX(ts) FROM observations").fetchone()
+        row = conn.execute(query, params).fetchone()
     return pd.Timestamp(row[0]) if row and row[0] else None
 
 

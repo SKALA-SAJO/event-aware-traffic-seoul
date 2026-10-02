@@ -38,7 +38,7 @@ aiops.log → Docker)를 그대로 쓰고, 데이터 계층과 모델 입력을 
 | 정보 누수 방지 | 일정은 **실제 공개(게시) 시각** 이후에만, **취소는 취소 공지 시각** 이후에만 반영. 관중 수 대신 수용·신고 인원 | 학습과 운영이 같은 정보로 동작 |
 | 이벤트 품질 | 회차 시각을 확정하지 못한 자동 수집 일정은 **검토 대기(review)** → 예측 미사용 | "공연 기간 ≠ 매일 공연" - 가짜 이벤트가 평상 시간 오차를 키움 |
 | 드리프트 판정 | 최근 72h **평상 시간대** RMSE / 기준(val 구간) RMSE > 1.5 | 이벤트·공휴일·**일시적 돌발(사고)** 제외, **공사**는 원인으로 표시 |
-| 재학습 정책 | 드리프트는 **경보만**(`retrain.on_drift: alert`), 재학습은 **14일 주기** fine-tuning | 실데이터에서 감지 즉시 재학습은 원인 모를 일시 정체에 맞춰져 평상 오차가 커짐 (실험 ③) |
+| 재학습 정책 | 드리프트는 **경보만**(`retrain.on_drift: alert`), 재학습은 **14일 주기** fine-tuning + 배포 게이트. 감지 기반 조기 재학습(`retrain.early`)은 구현했지만 **기본 꺼짐** | 감지 즉시 재학습은 원인 모를 일시 정체에 맞춰져 평상 오차가 커짐(실험 ③). 조기 재학습도 14일 주기보다 3시드 모두 나빴음(`reports/early_retrain/report.md`) |
 | 학습 데이터 | 속도 2023-01~ (`train` 은 DB 전체 사용) | 2025~ 보다 2023~ 가 좋음, 2020~2022 는 코로나 시기라 제외 (실험 ⑥) |
 | 이벤트 피처 출처 | `train.event_sources` = 경기·A매치·경찰청 집회·수작업 등록 | 공연·문화행사·통제 공지는 넣으면 나빠져 표시·드리프트 제외에만 사용 (실험 ⑤⑥) |
 
@@ -138,7 +138,9 @@ python -m uvicorn serving_app.main:app --port 8077                # 대시보드
 
 # 운영 (상시 서버 cron, 키는 .env 에서 자동으로 읽음)
 python scripts/collect_hourly.py                                  # 매시 (운영 시 15분 간격 수집 → 시간 평균 권장)
-python serving_app/train_and_register.py --fine-tune              # 14일마다
+python serving_app/train_and_register.py --fine-tune              # 수동 재학습
+scripts/periodic_retrain.sh install                               # 매시 35분 판정 → 14일 경과 시 fine-tune → 서버 reload (launchd)
+scripts/sync_collected.sh install                                 # 매시 20·50분 수집 반영 → 예측 → 드리프트 점검(/monitoring/drift/check)
 ```
 
 ## 실시간 수집 (GitHub Actions)
@@ -230,6 +232,13 @@ MAE·RMSE 를 전체/평상/이벤트, corridor 별로 보고하고, 비교 기�
 - **과거 재현 판정**: 예측 기록이 아직 없으면(실시간 운영 전) 판정 구간 72시간을 현재 모델로 매시 다시 예측해 실측과 비교합니다
   (DB 에 저장하지 않음, 대시보드에 "과거 재현"으로 표시, 재학습 트리거에는 쓰지 않음). 예: 9/28~9/30 기준 6개 구간 정상,
   상암 2개 구간은 9/28(월) 18~19시 원인 미상 정체(예측 22 → 실측 12 km/h)로 드리프트 감지
+- **재학습 자동화**: 서버는 재학습을 직접 하지 않습니다. `periodic_retrain.sh`(launchd, 매시 35분)가 `retrain_schedule.py` 로 "마지막 학습 후 14일 경과"를 확인하고, 경과했으면 별도 프로세스로 fine-tune 한 뒤 `/admin/reload`(localhost 전용)로 서버 모델 캐시를 비웁니다. 기록은 `logs/aiops.log`. `retrain.early.enabled: true` 로 켜면 연속 감지·최근 공사 시 재학습을 신청하고 쿨다운 후 같은 경로로 실행합니다(기본 꺼짐, 근거 `reports/early_retrain/report.md`; 값은 검증 전 초안)
+- **신호용 / 재학습용 데이터 분리**: 드리프트 판정(신호)은 `predictions`(모델이 낸 예측)와 도착한 실측을 비교하고, 재학습·게이트 평가는
+  `retrain.exclude_sources`(기본 `simulation`, `topis_history`, `synthetic`)를 뺀 **확정된 실측**(`topis`·`api`·`upload`)의 최근 14일만 씁니다.
+  `/predict/batch-test` 가 주입하는 시뮬레이션 관측치(`source=simulation`)는 경보를 울리는 신호로만 쓰이고 학습에는 들어가지 않으며, 데이터 끝 시각도
+  같은 기준으로 계산해 학습 구간이 비지 않습니다. 사용한 출처·구간·행 수는 `aiops.log`(`[INFO] retrain data: ...`)와 MLflow params 에 남습니다.
+  **시연 모드**: "구조 변화 → 재학습"을 주입 데이터로 보여주려면 `exclude_sources` 에서 `simulation` 만 빼세요(발표에서 시연용 설정으로 표시).
+  주의: 시연 모드에서도 승격은 보장되지 않습니다 - 한 corridor 만 주입하면 평가 구간이 그 corridor 로 좁아져 게이트 ①(평상 RMSE ≤ 기준)에서 막혔습니다.
 - **재학습**: 기본은 14일 주기(`train_and_register.py --fine-tune`) - 최근 14일 fine-tuning(최근 가중) → 게이트 →
   alias `production` 이동, 실패 시 기존 유지. 시연 때는 `retrain.on_drift: retrain` 으로 감지 즉시 재학습도 가능
 - **이벤트 상태 관리**: review(검토 대기) → 확정 / 취소는 삭제가 아니라 `cancelled` + 공지 시각
@@ -245,12 +254,14 @@ MAE·RMSE 를 전체/평상/이벤트, corridor 별로 보고하고, 비교 기�
 | GET | `/incidents` | 돌발 정보 |
 | POST/GET | `/data/upload`, `/data/status` | corridor CSV 적재 · 현황(교통량 도착 지연 포함) |
 | GET | `/hubs`, `/health`, `/monitoring/drift`, `/logs` | 거점·corridor·상태·드리프트·aiops 로그 |
-| POST | `/monitoring/drift/check` | 드리프트 주기 점검 (구간별 판정 → 드리프트면 `[WARN]`, 매시 `sync_collected.sh` 가 호출) |
+| POST | `/monitoring/drift/check` | 드리프트 주기 점검 (구간별 판정 → 드리프트면 `[WARN]`(같은 구간·날 1회), 매시 `sync_collected.sh` 가 호출). `on_drift: alert`(기본)에서는 재학습을 실행하지 않고, `retrain.early.enabled` 일 때만 조기 재학습을 신청 · `on_drift: retrain`(시연)이면 재학습·게이트까지 |
+| POST | `/admin/reload` | 모델 캐시 비우기 (localhost 에서만, 재학습 후 `periodic_retrain.sh` 가 호출) |
 
 ## 남은 과제
 
 **운영 전환 시 필수**
-- 14일 주기 재학습 cron (`train_and_register.py --fine-tune`)
+- 재학습 자동 실행 켜기: `scripts/periodic_retrain.sh install` (코드는 구현·시험했으나 launchd 등록은 각자 실행). 실제 예측 기록이 쌓인 뒤의 감지 → 경보 end-to-end는 미확인
+- 조기 재학습 값(연속 2일·쿨다운 3일·공사 14일·임계 1.5) 민감도 스윕, 공사 조건 평가(`incidents` 적재 후)
 
 **모델 개선**
 - 실험 ①③④⑤를 최종 설정(집회 + 2023~)으로 시드 3개 재실행 - 현재 리포트의 ①③④⑤는 이전 설정 기준
