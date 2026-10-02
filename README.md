@@ -145,13 +145,41 @@ python serving_app/train_and_register.py --fine-tune              # 14일마다
 
 | 워크플로 | 주기 | 내용 → `data-collect` 브랜치 |
 |---|---|---|
-| `collect_realtime.yml` | 30분 | 구간 링크 현재 속도(`TrafficInfo`) + 구간에 걸린 돌발(`AccInfo`) → `collected/speed/`, `incidents/` |
+| `collect_realtime.yml` | 15분 | 구간 링크 현재 속도(`TrafficInfo`) + 구간에 걸린 돌발(`AccInfo`) → `collected/speed/`, `incidents/` |
 | `collect_events.yml` | 매일 19:30 | 앞으로 90일 KOPIS·KBO·K리그 일정 → `collected/events/` (일정마다 처음 보인 날 = 실제 공개 시점) |
 
 - 준비: 저장소 Settings → Secrets 에 `SEOUL_API_KEY`, `KOPIS_API_KEY`
-- DB 반영(매시 cron 권장): `git fetch origin data-collect && python scripts/import_collected.py` → 링크별 1시간 평균(스냅숏 2회 이상) → 구간 집계
-- 직전 24시간이 쌓이면 대시보드에서 "지금" 기준 실시간 예측 가능 (수집 시작 2026-10-01 21:04 → 10-02 21시경부터).
-  그 전에 import 하면 마지막 관측 시각이 바뀌어 기본(최신) 예측이 "관측치 부족"으로 실패하므로, 24시간이 쌓인 뒤 처음 import 하세요
+- 실행: GitHub 예약 실행(schedule)은 자주 늦거나 빠져서(10-01 21시~10-02 08시에 1회만 실행), cron-job.org 가
+  같은 주기로 `POST /repos/SKALA-SAJO/event-aware-traffic-seoul/actions/workflows/<파일>/dispatches` (`{"ref":"main"}`,
+  Actions Read and write 권한만 있는 fine-grained 토큰)를 호출해 실행합니다. 워크플로의 schedule 은 보조로 남겨 둠
+- DB 반영(수동): `git fetch origin data-collect && python scripts/import_collected.py` → 링크별 1시간 평균(스냅숏 2회 이상) → 구간 집계
+- 직전 24시간이 쌓여야 대시보드에서 "지금" 기준 실시간 예측 가능. 그 전에 import 하면 마지막 관측 시각이 바뀌어 기본(최신) 예측이
+  "관측치 부족"으로 실패하므로, 처음에는 24시간이 쌓인 뒤 넣으세요 (`--require-hours 24` 가 자동으로 확인).
+  10-02 새벽(01~08시)이 비어 있어 연속 24시간은 10-03 09시경부터 채워집니다
+
+### DB 자동 반영 (macOS 백그라운드)
+
+수동 반영(`git fetch` + `import_collected.py`)과 예측 기록(`/predict`)을 맥이 매시 20·50분에 자동으로 실행합니다.
+예측 기록이 쌓여야 실데이터로 드리프트 판정(예측 vs 1시간 뒤 실측)이 돌아갑니다.
+
+```bash
+scripts/sync_collected.sh install    # 등록 (처음 한 번)
+scripts/sync_collected.sh status     # 켜져 있는지 확인
+scripts/sync_collected.sh            # 지금 한 번 실행
+scripts/sync_collected.sh stop       # 잠깐 멈추기 (재부팅·재로그인하면 다시 켜짐)
+scripts/sync_collected.sh start      # 다시 켜기
+scripts/sync_collected.sh uninstall  # 완전히 해제
+```
+
+- 터미널을 열어 둘 필요 없이 macOS(launchd)가 정해진 시각에만 잠깐 실행합니다. 결과는 `logs/sync.log`
+- 맥이 **켜져 있고 로그인된 상태**일 때만 돕니다. 잠자기 중 놓친 회차는 다음 회차에 밀린 수집분을 한꺼번에 가져옵니다
+- 서버(8077)가 꺼져 있으면 예측 호출만 건너뜁니다 (다른 주소: `SYNC_API_URL=http://localhost:8099`)
+- 실시간 속도가 아직 DB 에 없으면 수집분의 최근 24시간이 모두 찬 뒤에 처음 반영하고, 한 번 들어간 뒤에는 중간이 빠져도 계속 반영합니다.
+  돌발·이벤트는 항상 반영
+- 멈춰도 GitHub 수집은 계속됩니다. 수집까지 멈추려면 cron-job.org 두 작업의 Enable job 을 끄세요
+- `launchctl` 로 직접: 멈추기 `launchctl bootout gui/$(id -u)/com.skala.traffic-sync`,
+  해제는 그 뒤 `rm ~/Library/LaunchAgents/com.skala.traffic-sync.plist`, 확인 `launchctl list | grep traffic`
+- 시연의 주력은 재현 시연(과거 시각 예측, `simulate_drift.py`)이고, 이 자동 반영 기록은 "실제로도 운영 중"이라는 보조 근거입니다
 - 아직 안 되는 것: **경찰청 집회 매일 수집**(학습 피처라 운영 전 필수), A매치는 대시보드에서 수동 등록,
   실시간 속도(순간값 평균)와 TOPIS 시간 평균의 차이는 10월 TOPIS 엑셀 공개 후 겹치는 기간으로 검증 필요
 
@@ -219,7 +247,7 @@ MAE·RMSE 를 전체/평상/이벤트, corridor 별로 보고하고, 비교 기�
 ## 남은 과제
 
 **운영 전환 시 필수**
-- 실시간 수집은 GitHub Actions 로 동작 중(30분 간격 → 시간 평균, "실시간 수집" 참고). 남은 것: `import_collected.py` 매시 실행 환경
+- 실시간 수집은 동작 중(cron-job.org → GitHub Actions, 15분 간격 → 시간 평균), DB 반영은 맥 자동 반영(`scripts/sync_collected.sh`)으로 매시 실행 ("실시간 수집" 참고)
 - 경찰청 집회 매일 자동 수집 (팀 저장소의 `fetch_smpa_rallies.py`·`parse_smpa_rallies.py` 이식). 없으면 운영 중 집회 피처가 0 으로 들어감
 - 14일 주기 재학습 cron (`train_and_register.py --fine-tune`)
 

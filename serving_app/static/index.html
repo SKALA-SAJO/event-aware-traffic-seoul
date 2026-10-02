@@ -226,6 +226,68 @@
   td { padding: 11px 12px; line-height: 1.45; }
   tbody tr:last-child td { border-bottom: 0; }
   tbody tr:hover td { background: var(--surface-2); }
+  .forecast-details { margin-top: 14px; }
+  .forecast-details summary { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--series-1);
+    font-size: 0.74rem; font-weight: 650; list-style: none; }
+  .forecast-details summary::-webkit-details-marker { display: none; }
+  .forecast-details summary::after { content: "＋"; font-size: 0.82rem; }
+  .forecast-details[open] summary::after { content: "−"; }
+  .forecast-table-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    margin: 10px 2px 6px; font-size: 0.69rem; }
+  .forecast-table-route { color: var(--text); font-weight: 650; }
+  .forecast-table-hint { color: var(--muted); }
+  .forecast-table-scroll { overflow-x: auto; }
+  .forecast-table { table-layout: fixed; font-size: 0.73rem; }
+  .forecast-table th { padding: 9px 7px; font-size: 0.67rem; line-height: 1.3; white-space: normal; }
+  .forecast-table td { padding: 9px 7px; }
+  .forecast-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+  .forecast-table .time-cell { white-space: nowrap; font-weight: 600; }
+  .forecast-table .table-primary { display: block; color: var(--text); font-weight: 650; white-space: nowrap; }
+  .forecast-table .table-secondary { display: block; margin-top: 2px; color: var(--muted); font-size: 0.65rem; white-space: nowrap; }
+  .forecast-table .delta-positive { color: var(--event-ink); font-weight: 700; }
+  .forecast-table .delta-negative { color: var(--good-text); font-weight: 700; }
+  .forecast-table tbody tr:nth-child(even) td { background: var(--surface-2); }
+  .forecast-table tbody tr:hover td { background: var(--kpi-bg); }
+  .events-table { table-layout: fixed; font-size: 0.73rem; }
+  .events-table th { padding: 9px 8px; font-size: 0.67rem; }
+  .events-table td { padding: 11px 8px; vertical-align: top; }
+  .event-hub-chip, .event-type, .event-status { display: inline-flex; align-items: center; width: fit-content;
+    padding: 4px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-2);
+    font-size: 0.66rem; font-weight: 650; line-height: 1.25; }
+  .event-main { overflow-wrap: anywhere; }
+  .event-title-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 7px; }
+  .event-type { padding: 3px 7px; color: var(--series-1); }
+  .event-title { color: var(--text); font-size: 0.76rem; font-weight: 650; line-height: 1.45; }
+  .event-source { display: block; margin-top: 3px; color: var(--muted); font-size: 0.65rem; }
+  .event-statuses { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .event-status.is-live { color: var(--series-1); background: var(--kpi-bg); }
+  .event-status.is-cancelled { color: var(--critical); }
+  .event-status.is-review { color: var(--event-ink); }
+  .event-when { min-width: 132px; }
+  .event-time-item { display: flex; justify-content: space-between; gap: 6px; white-space: nowrap; }
+  .event-time-item + .event-time-item { margin-top: 4px; }
+  .event-time-label { color: var(--muted); font-size: 0.65rem; }
+  .event-time-value { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .event-size { text-align: right; white-space: nowrap; font-weight: 600; }
+  .event-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
+  .event-actions .btn { min-height: 30px; padding: 6px 9px; font-size: 0.68rem; }
+  .events-table .empty { text-align: center; }
+  .data-table { table-layout: fixed; font-size: 0.73rem; }
+  .data-table th { padding: 9px 8px; font-size: 0.67rem; }
+  .data-table td { padding: 11px 8px; vertical-align: top; }
+  .data-corridor { font-weight: 650; }
+  .data-count, .data-missing { text-align: right; font-variant-numeric: tabular-nums; }
+  .data-value { display: block; color: var(--text); font-weight: 700; white-space: nowrap; }
+  .data-sub { display: block; margin-top: 3px; color: var(--muted); font-size: 0.65rem; white-space: nowrap; }
+  .data-period-item { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+  .data-period-item + .data-period-item { margin-top: 4px; }
+  .data-period-label { color: var(--muted); font-size: 0.65rem; }
+  .data-period-value { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .data-sources { display: flex; flex-wrap: wrap; gap: 4px; }
+  .data-source-chip { display: inline-flex; padding: 3px 7px; border-radius: 999px; background: var(--surface-2);
+    color: var(--text-2); font-size: 0.64rem; line-height: 1.3; overflow-wrap: anywhere; }
+  .data-table .empty { text-align: center; }
   .note { line-height: 1.5; }
   .pipeline { gap: 9px; }
   .stage { border: 1px solid var(--grid); border-radius: 13px; padding: 12px; background: var(--surface-2); }
@@ -235,6 +297,45 @@
     .topnav { padding: 12px 20px; }
     .forecast-panel .section-head { align-items: stretch; }
     .issue-ctl { margin-left: 0; width: fit-content; max-width: 100%; }
+  }
+  @media (max-width: 1100px) {
+    .events-table-scroll { overflow: visible; border: 0; }
+    .events-table, .events-table tbody { display: block; width: 100%; }
+    .events-table colgroup { display: none; }
+    .events-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .events-table tbody tr { display: grid; grid-template-columns: 1fr auto; gap: 9px 12px;
+      margin: 9px 0; padding: 12px; border: 1px solid var(--grid); border-radius: 13px; background: var(--surface); }
+    .events-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+      min-width: 0; padding: 0; border: 0; background: transparent !important; text-align: left; }
+    .events-table td::before { content: attr(data-label); color: var(--muted); font-size: 0.62rem; font-weight: 550; }
+    .events-table td.event-hub { grid-column: 1; grid-row: 1; }
+    .events-table td.event-size { grid-column: 2; grid-row: 1; align-items: flex-end; }
+    .events-table td.event-main { grid-column: 1 / -1; grid-row: 2; }
+    .events-table td.event-when { grid-column: 1 / -1; grid-row: 3; }
+    .events-table td.event-action-cell { grid-column: 1 / -1; grid-row: 4; align-items: stretch;
+      padding-top: 7px; border-top: 1px solid var(--grid); }
+    .events-table td.event-action-cell::before { display: none; }
+    .events-table .event-time-item { justify-content: flex-start; gap: 8px; }
+    .events-table .event-size { white-space: normal; }
+    .events-table td.empty { grid-column: 1 / -1; display: block; padding: 18px 8px; text-align: center; }
+    .data-table-scroll { overflow: visible; border: 0; }
+    .data-table, .data-table tbody { display: block; width: 100%; }
+    .data-table colgroup { display: none; }
+    .data-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .data-table tbody tr { display: grid; grid-template-columns: 1fr auto; gap: 9px 12px;
+      margin: 9px 0; padding: 12px; border: 1px solid var(--grid); border-radius: 13px; background: var(--surface); }
+    .data-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+      min-width: 0; padding: 0; border: 0; background: transparent !important; text-align: left; }
+    .data-table td::before { content: attr(data-label); color: var(--muted); font-size: 0.62rem; font-weight: 550; }
+    .data-table td.data-corridor { grid-column: 1; grid-row: 1; }
+    .data-table td.data-count { grid-column: 2; grid-row: 1; align-items: flex-end; }
+    .data-table td.data-period { grid-column: 1 / -1; grid-row: 2; }
+    .data-table td.data-missing { grid-column: 1 / -1; grid-row: 3; }
+    .data-table td.data-sources-cell { grid-column: 1 / -1; grid-row: 4; }
+    .data-table .data-count, .data-table .data-missing { text-align: left; }
+    .data-table td.empty { grid-column: 1 / -1; display: block; padding: 18px 8px; text-align: center; }
   }
   @media (max-width: 600px) {
     .page { padding: 18px 14px 32px; gap: 14px; }
@@ -250,6 +351,22 @@
     .hub-card { padding: 16px; }
     .dir-kpi { padding: 13px 11px; }
     .dir-kpi .v { font-size: 1.35rem; }
+    .forecast-table-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
+    .forecast-table-scroll { overflow: visible; border: 0; }
+    .forecast-table, .forecast-table tbody { display: block; width: 100%; }
+    .forecast-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .forecast-table tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+      margin: 8px 0; padding: 11px 12px; border: 1px solid var(--grid); border-radius: 12px;
+      background: var(--surface); }
+    .forecast-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      min-width: 0; padding: 0; border: 0; background: transparent !important; text-align: left; }
+    .forecast-table td::before { content: attr(data-label); color: var(--muted); font-size: 0.62rem; font-weight: 500; }
+    .forecast-table td.time-cell { grid-column: 1 / -1; flex-direction: row; justify-content: space-between;
+      align-items: baseline; padding-bottom: 6px; border-bottom: 1px solid var(--grid); }
+    .forecast-table td.time-cell::before { color: var(--text-2); font-size: 0.69rem; font-weight: 650; }
+    .forecast-table .numeric { text-align: left; }
+    .forecast-table .table-secondary { margin-top: 1px; }
     .two-col { gap: 14px; }
     .two-col > .card { height: auto; max-height: 520px; }
   }
@@ -332,8 +449,9 @@
           <button class="tab" role="tab" aria-selected="false" data-evtab="review" type="button">검토 대기</button>
         </div>
       </div>
-      <div class="table-scroll"><table>
-        <thead><tr><th>거점</th><th>일정</th><th>시작–종료</th><th>규모</th><th></th></tr></thead>
+      <div class="table-scroll events-table-scroll"><table class="events-table">
+        <colgroup><col style="width:14%"><col style="width:34%"><col style="width:24%"><col style="width:11%"><col style="width:17%"></colgroup>
+        <thead><tr><th>거점</th><th>일정</th><th>일정 시간</th><th>규모</th><th></th></tr></thead>
         <tbody id="events-body"><tr><td colspan="5" class="empty">-</td></tr></tbody>
       </table></div>
       <div class="note" id="events-note"></div>
@@ -381,8 +499,9 @@
         <input type="file" id="data-file" accept=".csv" />
         <button class="btn primary" id="data-upload" type="button">업로드</button>
       </div>
-      <div class="table-scroll" style="margin-top:10px"><table>
-        <thead><tr><th>방향</th><th>시간 수</th><th>기간</th><th>교통량 결측</th><th>출처</th></tr></thead>
+      <div class="table-scroll data-table-scroll" style="margin-top:10px"><table class="data-table">
+        <colgroup><col style="width:24%"><col style="width:14%"><col style="width:24%"><col style="width:19%"><col style="width:19%"></colgroup>
+        <thead><tr><th>방향</th><th>관측 건수</th><th>관측 기간</th><th>교통량 결측</th><th>출처</th></tr></thead>
         <tbody id="data-body"><tr><td colspan="5" class="empty">-</td></tr></tbody>
       </table></div>
       <div class="note" id="lag-note"></div>
@@ -474,6 +593,10 @@ function fmtExtra(value) {
   if (value == null || !Number.isFinite(Number(value))) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return sign + fmtDuration(value);
+}
+
+function fmtSpeed(value) {
+  return value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toFixed(1);
 }
 
 function renderChart(container, fc) {
@@ -574,14 +697,31 @@ function renderHub(hubName, fcs) {
     <div class="tabs" role="tablist">${fcs.map((fc, i) => `<button class="tab" role="tab" type="button" data-i="${i}" aria-selected="${i === 0}">${esc(CORR[fc.corridor]?.short ?? fc.corridor_name)}</button>`).join("")}</div>
     <div class="chart-wrap" style="margin-top:6px"></div>
     <div class="legend"><span><span class="sw"></span>예상 속도</span><span><span class="sw usual"></span>평소(최근 8주 같은 요일·시각)</span>${fcs.some((fc) => fc.forecast.some((p) => p.actual_speed_kmh != null)) ? '<span><span class="sw actual"></span>실측</span>' : ""}${evNames.length && !baseline ? '<span><span class="sw band"></span>이벤트 영향 시간</span>' : ""}</div>
-    <details><summary>표로 보기</summary><div class="table-scroll"><table>
-      <thead><tr><th>방향</th><th>시각</th><th>예상 km/h</th><th>실측 km/h</th><th>평소 km/h</th><th>예상 소요</th><th>평소 대비</th></tr></thead>
-      <tbody>${fcs.flatMap((fc) => fc.forecast.map((p) => `<tr><td>${esc(fc.corridor_name)}</td><td>${esc(p.target_ts.slice(5, 16))}</td><td>${p.speed_kmh}</td><td>${p.actual_speed_kmh ?? "-"}</td><td>${p.usual_speed_kmh ?? "-"}</td><td>${fmtDuration(p.travel_time_min)}</td><td>${fmtExtra(p.extra_min)}</td></tr>`)).join("")}</tbody>
-    </table></div></details>`;
+    <details class="forecast-details"><summary>표로 보기</summary>
+      <div class="forecast-table-heading"><span class="forecast-table-route"></span>
+        <span class="forecast-table-hint">속도는 km/h · 실측은 확인 가능한 경우 표시</span></div>
+      <div class="table-scroll forecast-table-scroll"><table class="forecast-table">
+        <thead><tr><th>시각</th><th class="numeric">속도</th><th class="numeric">평소</th><th class="numeric">예상 소요</th><th class="numeric">평소 대비</th></tr></thead>
+        <tbody class="forecast-table-body"></tbody>
+      </table></div>
+    </details>`;
   const wrap = card.querySelector(".chart-wrap");
   const show = (i) => {
     card.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.i == i)));
-    renderChart(wrap, { ...fcs[i], name: `${hubName} ${fcs[i].corridor_name}` });
+    const fc = fcs[i];
+    renderChart(wrap, { ...fc, name: `${hubName} ${fc.corridor_name}` });
+    const hasActual = fc.forecast.some((p) => p.actual_speed_kmh != null);
+    card.querySelector(".forecast-table-route").textContent = fc.corridor_name;
+    card.querySelector(".forecast-table-body").innerHTML = fc.forecast.map((p) => {
+      const deltaClass = p.extra_min > 0 ? "delta-positive" : p.extra_min < 0 ? "delta-negative" : "";
+      return `<tr>
+        <td class="time-cell" data-label="예측 시각">${esc(p.target_ts.slice(5, 16))}</td>
+        <td class="numeric" data-label="속도 (km/h)"><span class="table-primary">${fmtSpeed(p.speed_kmh)} 예상</span>${hasActual ? `<span class="table-secondary">실측 ${fmtSpeed(p.actual_speed_kmh)}</span>` : ""}</td>
+        <td class="numeric" data-label="평소 속도 (km/h)">${fmtSpeed(p.usual_speed_kmh)}</td>
+        <td class="numeric" data-label="예상 소요">${fmtDuration(p.travel_time_min)}</td>
+        <td class="numeric ${deltaClass}" data-label="평소 대비">${fmtExtra(p.extra_min)}</td>
+      </tr>`;
+    }).join("");
   };
   card.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => show(Number(t.dataset.i))));
   show(0);
@@ -657,9 +797,31 @@ async function loadEvents() {
       const actions = e.status === "review"
         ? `<button class="btn" data-st="scheduled" data-id="${e.id}" type="button">확정</button>`
         : e.status === "cancelled" ? "" : `<button class="btn" data-st="cancelled" data-id="${e.id}" type="button">취소</button>`;
-      return `<tr><td>${esc(HUBS[e.hub]?.name ?? e.hub)}</td><td>${esc(TYPE_KO[e.type] ?? e.type)} · ${esc(e.title)}<br><span class="hub-meta">${esc(e.source ?? "")}</span></td>
-        <td>${esc(e.start.slice(5, 16))}–${esc(e.end.slice(11, 16))}</td><td>${e.expected_size ? Number(e.expected_size).toLocaleString() : "-"}</td>
-        <td style="white-space:nowrap">${actions} <button class="btn" data-del="${e.id}" type="button">삭제</button></td></tr>`;
+      const startDate = e.start.slice(5, 10).replace("-", ".");
+      const endDate = e.end.slice(5, 10).replace("-", ".");
+      const startText = `${startDate} ${e.start.slice(11, 16)}`;
+      const endText = `${endDate === startDate ? "" : `${endDate} `}${e.end.slice(11, 16)}`;
+      const statusTags = [
+        e.ongoing && e.status !== "cancelled" ? '<span class="event-status is-live">진행 중</span>' : "",
+        e.status === "cancelled" ? '<span class="event-status is-cancelled">취소</span>' : "",
+        EV_TAB === "review" ? '<span class="event-status is-review">시각 확인 필요</span>' : "",
+      ].filter(Boolean).join("");
+      const size = e.expected_size != null && Number.isFinite(Number(e.expected_size))
+        ? `${Number(e.expected_size).toLocaleString()}명` : "미정";
+      return `<tr>
+        <td class="event-hub" data-label="거점"><span class="event-hub-chip">${esc(HUBS[e.hub]?.name ?? e.hub)}</span></td>
+        <td class="event-main" data-label="일정">
+          <div class="event-title-line"><span class="event-type">${esc(TYPE_KO[e.type] ?? e.type)}</span><span class="event-title">${esc(e.title)}</span></div>
+          <span class="event-source">${esc(e.source ?? "")}</span>
+          ${statusTags ? `<div class="event-statuses">${statusTags}</div>` : ""}
+        </td>
+        <td class="event-when" data-label="일정 시간">
+          <div class="event-time-item"><span class="event-time-label">시작</span><time class="event-time-value">${esc(startText)}</time></div>
+          <div class="event-time-item"><span class="event-time-label">종료</span><time class="event-time-value">${esc(endText)}</time></div>
+        </td>
+        <td class="event-size" data-label="규모">${size}</td>
+        <td class="event-action-cell"><div class="event-actions">${actions}<button class="btn" data-del="${e.id}" type="button">삭제</button></div></td>
+      </tr>`;
     }).join("") : `<tr><td colspan="5" class="empty">${EV_TAB === "review" ? "검토 대기 일정이 없습니다" : "예정된 이벤트가 없습니다"}</td></tr>`;
     document.querySelectorAll("[data-st]").forEach((b) => b.addEventListener("click", () => setStatus(b.dataset.id, b.dataset.st)));
     document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
@@ -779,9 +941,26 @@ async function loadLogs() {
 async function loadData() {
   try {
     const s = await api("/data/status");
-    $("#data-body").innerHTML = s.corridors.length ? s.corridors.map((h) => `<tr><td>${esc(corrName(h.corridor))}</td>
-      <td>${h.rows.toLocaleString()}</td><td>${esc(h.start.slice(0, 10))} ~ ${esc(h.end.slice(0, 13))}시</td>
-      <td>${h.volume_missing.toLocaleString()}</td><td>${esc(h.sources)}</td></tr>`).join("")
+    const formatHour = (value) => value
+      ? `${String(value).slice(0, 10).replace(/-/g, ".")} ${String(value).slice(11, 13)}시` : "—";
+    $("#data-body").innerHTML = s.corridors.length ? s.corridors.map((h) => {
+      const rows = Number(h.rows) || 0;
+      const missing = Number(h.volume_missing) || 0;
+      const missingRate = rows ? (missing / rows * 100).toFixed(1) : "0.0";
+      const sources = String(h.sources ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      return `<tr>
+        <td class="data-corridor" data-label="방향">${esc(corrName(h.corridor))}</td>
+        <td class="data-count" data-label="관측 건수"><span class="data-value">${rows.toLocaleString()}건</span><span class="data-sub">시간 단위 기록</span></td>
+        <td class="data-period" data-label="관측 기간">
+          <div class="data-period-item"><span class="data-period-label">시작</span><time class="data-period-value">${esc(formatHour(h.start))}</time></div>
+          <div class="data-period-item"><span class="data-period-label">최근</span><time class="data-period-value">${esc(formatHour(h.end))}</time></div>
+        </td>
+        <td class="data-missing" data-label="교통량 결측"><span class="data-value">${missing.toLocaleString()}건</span><span class="data-sub">전체의 ${missingRate}%</span></td>
+        <td class="data-sources-cell" data-label="데이터 출처"><div class="data-sources">${sources.length
+          ? sources.map((source) => `<span class="data-source-chip">${esc(source)}</span>`).join("")
+          : '<span class="data-source-chip">미상</span>'}</div></td>
+      </tr>`;
+    }).join("")
       : `<tr><td colspan="5" class="empty">데이터 없음 - <code>python scripts/generate_synthetic_data.py</code> 또는 업로드</td></tr>`;
     const lag = s.volume_arrival_lag_hours;
     $("#lag-note").textContent = lag

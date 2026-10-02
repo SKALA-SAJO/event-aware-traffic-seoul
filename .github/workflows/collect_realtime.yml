@@ -1,6 +1,7 @@
-# 실시간 수집: 30분마다 corridor 링크 속도·돌발 정보를 받아 data-collect 브랜치의 CSV 에 추가합니다.
-# (15분 간격은 하루 96회 × 30일 ≈ 월 2,880분으로 비공개 저장소 무료 한도(월 2,000분)를 넘어 30분으로 조정.
-#  시간대마다 스냅숏 2회 → import_collected.py 의 --min-snapshots 기본값 2 와 맞음. 공개 저장소면 15분으로 되돌려도 됨)
+# 실시간 수집: 15분마다 corridor 링크 속도·돌발 정보를 받아 data-collect 브랜치의 CSV 에 추가합니다.
+# (비공개 저장소일 때는 Actions 무료 한도(월 2,000분) 때문에 30분 간격이었고, 공개 저장소로 바꾸며 15분으로 되돌림.
+#  시간대마다 스냅숏 최대 4회 → import_collected.py 는 2회 이상 모인 시간대를 평균. 30분 시절 시간대(2회)도 그대로 반영됨)
+# 실제 실행은 cron-job.org 가 15분마다 workflow_dispatch 로 호출합니다. 아래 schedule 은 보조입니다.
 # 노트북에서 git fetch origin data-collect && python scripts/import_collected.py 로 DB 에 1시간 평균으로 넣습니다.
 #
 # 준비: 저장소 Settings → Secrets and variables → Actions → New repository secret
@@ -11,7 +12,7 @@ name: collect-realtime
 
 on:
   schedule:
-    - cron: "7,37 * * * *"   # 매시 07·37분 (정각·30분은 GitHub 예약 실행이 몰려 지연·누락이 잦음)
+    - cron: "7,22,37,52 * * * *"   # 매시 07·22·37·52분 (정각·30분은 GitHub 예약 실행이 몰려 지연·누락이 잦음)
   workflow_dispatch: {}
 
 permissions:
