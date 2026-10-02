@@ -6,11 +6,11 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Request
 
 from data import storage
-from data.config import corridors, hubs
+from data.config import corridors, hubs, section
 from serving_app.errors import ModelLoadError
 from serving_app import model_loader
 from serving_app.monitoring.drift_detector import drift_status
-from serving_app.monitoring.retrain_trigger import check_alert_only
+from serving_app.monitoring.retrain_trigger import check_alert_only, check_and_trigger
 
 router = APIRouter()
 
@@ -55,23 +55,33 @@ def drift():
     return [drift_status(c, model) for c in model.units]
 
 
-@router.post("/monitoring/check")
-def monitoring_check():
+@router.post("/monitoring/drift/check")
+def drift_check():
     """
-    운영용 감지 확인 (sync_collected.sh 가 /predict 직후 호출): corridor 별로 판정해 [WARN] 경보와 조기 재학습 신청만 기록.
-    재학습은 on_drift 값과 무관하게 여기서 실행하지 않습니다 (scripts/periodic_retrain.sh 가 별도 프로세스로 실행).
+    주기 점검(scripts/sync_collected.sh 가 매시 예측 기록 직후 호출): 구간마다 실제 예측 기록으로 드리프트를 판정하고
+    드리프트면 aiops.log 에 [WARN] 을 남긴다. 과거 재현 판정은 쓰지 않으므로 예측 기록이 쌓이기 전에는 모두 판정 대기
+    (insufficient_data)다.
+
+    retrain.on_drift 가 retrain(시연용)이면 기존대로 재학습·게이트까지 이어진다. 그 외(alert, 기본)에는 재학습을 실행하지
+    않고 경보(같은 구간·날 1회)와 일별 감지 기록만 남긴다. 조기 재학습은 retrain.early.enabled 일 때만 신청하고,
+    실행은 서버가 아니라 scripts/periodic_retrain.sh 가 별도 프로세스로 한다.
     """
     try:
         model = model_loader.get_model()
     except ModelLoadError as e:
         raise HTTPException(503, str(e))
-    out = []
-    for c in model.units:
-        r = check_alert_only(c)
-        d = r["drift"]
-        out.append({"corridor": c, "status": r["status"], "ratio": d.get("ratio"), "n_hours": d.get("n_hours"),
-                    "consecutive_days": r.get("consecutive_days"), "early_retrain": r["early_retrain"]})
-    return out
+    check = check_and_trigger if section("retrain").get("on_drift", "retrain") == "retrain" else check_alert_only
+    results = []
+    for corridor in model.units:
+        r = check(corridor)
+        d = r.get("drift", {})
+        results.append({"corridor": corridor, "status": r["status"], "ratio": d.get("ratio"),
+                        "reason": d.get("reason"), "n_hours": d.get("n_hours"),
+                        "retrain": r.get("retrain"), "promoted": r.get("promoted"),
+                        "consecutive_days": r.get("consecutive_days"), "early_retrain": r.get("early_retrain")})
+    return {"checked_at": dt.datetime.now().isoformat(timespec="seconds"), "model_version": model.version,
+            "drift": [x["corridor"] for x in results if x["status"] in ("drift_detected", "retrain_triggered")],
+            "results": results}
 
 
 @router.post("/admin/reload")
