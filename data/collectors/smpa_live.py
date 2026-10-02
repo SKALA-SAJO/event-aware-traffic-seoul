@@ -17,12 +17,18 @@ import html
 import re
 import subprocess
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 
 BASE = "https://www.smpa.go.kr"
 BOARD = "/user/nd54882.do"
 TIMEOUT = 20
+# 해외(GitHub Actions) 러너에서 PDF 받기가 간헐적으로 끊김(10-02: RemoteDisconnected, 같은 실행의 다른 PDF는 성공).
+# 브라우저처럼 User-Agent 를 보내고, 실패하면 3·6·12초 쉬었다가 다시 시도한다 (하루 1~2개 PDF 라 시간 부담 없음).
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                         "Chrome/126.0 Safari/537.36"}
+RETRY_WAITS = (3, 6, 12)
 
 WRITTEN_RE = re.compile(r"\(\s*(?:(20\d{2})\s*\.\s*)?(\d{1,2})\s*\.\s*(\d{1,2})\s*\.?\s*(\d{1,2}):(\d{2})\s*기준\s*작[성서]\s*\)")
 BODY_DATE_RE = re.compile(r"(20\d{2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})\s*\.?\s*\(\s*([월화수목금토일])")
@@ -42,9 +48,10 @@ ROW_COLS = ["date", "start", "end", "count", "station", "place", "text", "writte
 def _get(url: str, data: dict | None = None) -> bytes:
     body = urllib.parse.urlencode(data).encode() if data else None
     last = None
-    for _ in range(2):
+    for wait in (0, *RETRY_WAITS):
+        time.sleep(wait)
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, data=body), timeout=TIMEOUT) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, data=body, headers=HEADERS), timeout=TIMEOUT) as r:
                 return r.read()
         except Exception as e:
             last = e
