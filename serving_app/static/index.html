@@ -203,7 +203,8 @@
   .dir-kpi:focus-visible { outline: 3px solid rgba(0, 113, 227, 0.36); outline-offset: 2px; }
   .dir-kpi > span, .dir-kpi .k-main { display: block; }
   .dir-kpi .k-route { font-size: 0.8rem; font-weight: 650; color: var(--text); line-height: 1.3; }
-  .dir-kpi .k-route .badge { margin-left: 3px; font-weight: 500; vertical-align: 1px; }
+  .dir-kpi .k-route { display: flex !important; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
+  .dir-kpi .k-len { font-size: 0.7rem; font-weight: 500; color: var(--muted); white-space: nowrap; }
   .dir-kpi .k-segs { display: flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--surface-2); align-self: flex-start; }
   .dir-kpi .seg { padding: 3px 9px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
   .dir-kpi .seg.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
@@ -708,9 +709,12 @@ function kpiInner(fc, mode) {
   const c = CORR[fc.corridor] || {};
   const role = ROLE_KO[c.role] || "";
   const tone = w.extra_min > 0 ? "is-delay" : w.extra_min < 0 ? "is-faster" : "";
-  const segs = [["peak", label.replace(" 시각", "")], ["slow", `${fc.forecast.length}시간 최저`]]
+  const peakText = label.replace(" 시각", "").replace(" ", "");   // 최대지연 / 최대단축 / 기준
+  const segs = [["peak", peakText], ["slow", "최저지연"]]
     .map(([m, t]) => `<span class="seg${m === mode ? " on" : ""}">${esc(t)}</span>`).join("");
-  return `<span class="k-route" title="${esc(fc.corridor_name)}">${esc(c.short ?? fc.corridor_name)}${role ? ` <span class="badge">${role}</span>` : ""}</span>
+  const len = Number(fc.segment_length_km);
+  const lenHtml = Number.isFinite(len) && len > 0 ? `<span class="k-len">${len.toFixed(1)} km</span>` : "";
+  return `<span class="k-route" title="${esc(fc.corridor_name)}${role ? ` · ${role}` : ""}"><span class="k-name">${esc(c.short ?? fc.corridor_name)}방향</span>${lenHtml}</span>
     <span class="k-segs" aria-hidden="true">${segs}</span>
     <span class="k-main"><span class="v ${tone}">${fmtSpeed(w.speed_kmh)}<span class="unit">km/h</span></span><span class="k-time">${esc(w.target_ts.slice(11, 16))} 기준</span></span>
     <span class="k-delta ${tone}">${speedVsUsual(w)}</span>
