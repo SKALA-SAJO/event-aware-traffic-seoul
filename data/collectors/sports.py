@@ -59,10 +59,11 @@ def kbo_events(start: str, end: str, announce_days: int = 7, cancel_notice_hours
             t0 = pd.Timestamp(f"{month.year}-{day.group(1)}-{day.group(2)} {_strip(cells[0]['Text'])}")
             if not (pd.Timestamp(start) <= t0 <= pd.Timestamp(end) + pd.Timedelta(days=1)):
                 continue
+            # 비고가 '-' 가 아니면 우천·폭염·미세먼지·그라운드사정 등 취소 (팀 집계 117건과 같은 기준)
             teams = re.sub(r"\s*\d+\s*vs\s*\d+\s*|\s+vs\s+", " vs ", _strip(cells[1]["Text"]))
             out.append(_event(hub, f"KBO {teams}", t0, KBO_MINUTES, cap,
                               f"{venue} KBO {teams} {note if note != '-' else ''}".strip(), "kbo_schedule",
-                              announce_days, "취소" in note, cancel_notice_hours))
+                              announce_days, note not in ("-", ""), cancel_notice_hours))
     return out
 
 

@@ -5,8 +5,11 @@ numpy==2.4.4
 pandas>=3.0
 pyyaml>=6.0
 openpyxl>=3.1
+python-calamine>=0.8.2
 tensorflow==2.21.0
 mlflow==3.16.0
 requests==2.33.1
 python-multipart==0.0.20
 anthropic>=1.0
+openai>=3.22
+tabulate>=0.10

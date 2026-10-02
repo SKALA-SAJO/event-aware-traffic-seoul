@@ -27,16 +27,21 @@ from serving_app.lstm_model import build_model
 
 # ───────────────────────────────────── 데이터 ─────────────────────────────────────
 
-def load_data(start=None, end=None, exclude_sources: tuple = ("simulation",)):
-    """기본적으로 드리프트 시뮬레이션이 주입한 데이터(source='simulation')는 base 학습·실험에서 제외."""
+# base 학습·실험에서 제외하는 관측 출처: 드리프트 시뮬레이션 주입분, 2023 이전 이력(코로나 구간 분석용)
+DEFAULT_EXCLUDE = ("simulation", "topis_history")
+
+
+def load_data(start=None, end=None, exclude_sources: tuple = DEFAULT_EXCLUDE):
+    """기본적으로 시뮬레이션 주입 데이터·2023 이전 이력은 base 학습·실험에서 제외 (이벤트는 관측 출처와 무관)."""
+    events_exclude = tuple(s for s in exclude_sources if s != "topis_history")
     return (storage.load_observations(start=start, end=end, exclude_sources=exclude_sources),
-            storage.load_events(start=start, end=end, exclude_sources=exclude_sources))
+            storage.load_events(start=start, end=end, exclude_sources=events_exclude))
 
 
 def data_source() -> str:
     """관측치 출처 요약 - 합성 데이터로 낸 결과임을 리포트·MLflow 에 남기기 위함."""
     with storage.connect() as conn:
-        rows = conn.execute("SELECT DISTINCT source FROM observations WHERE source != 'simulation'").fetchall()
+        rows = conn.execute("SELECT DISTINCT source FROM observations WHERE source NOT IN ('simulation', 'topis_history')").fetchall()
     return ",".join(sorted(r[0] for r in rows if r[0]))
 
 

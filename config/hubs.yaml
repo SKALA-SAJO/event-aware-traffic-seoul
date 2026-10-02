@@ -23,7 +23,14 @@ train:
   val_days: 21              # early stopping · 드리프트 기준 RMSE 산정 구간 (test 직전)
   test_days: 56             # 평가 구간 (데이터 마지막 N일)
   seeds: [42, 7, 2026]      # 실험 결과는 이 시드들의 평균으로 보고
+  # 기본 학습(base)에 쓰는 관측 시작일. 이전(2020~2022)은 source='topis_history' 로 따로 두고 base 학습·실험에서 제외 -
+  # 코로나 구간(2020~2021)을 드리프트 분석(scripts/covid_drift_report.py)에만 쓰기 위함 (scripts/import_team_raw.py 가 사용).
+  data_start: "2023-01-01"
   feature_stage: full       # speed | volume | calendar | full  (실험 ① 결과로 결정)
+  # 교통량 입력 (2026-10-02 끔): 연결 지점이 광화문 A-17 뿐이고 그 값이 2026-01~07 비어 있으며, 실시간 수집이 없어
+  # 운영에서는 항상 결측 → 학습·운영 조건 불일치. 실험 ① 의 효과(이벤트 RMSE 1.913 → 1.852, 시드 1개)도 지점 없는 구간에서
+  # 같은 크기로 흔들려 잡음 수준. true 로 되돌리면 이전처럼 [vol_z, vol_missing] 이 입력에 들어가며 base 재학습이 필요함.
+  use_volume: false
   event_mode: decay         # none | flag | scale | decay | text (실험 ② 결과로 결정)
   # 이벤트 피처로 쓰는 출처 (실험 ⑤·⑥, 시드 3개, 같은 평가 시간 기준).
   #   ⑤ KOPIS 공연·서울시 문화행사: 넣으면 나빠짐(1.611 → 1.651~1.682) → 피처 제외 (표시·드리프트 제외에만 사용)
