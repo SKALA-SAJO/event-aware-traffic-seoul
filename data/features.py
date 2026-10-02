@@ -146,7 +146,7 @@ class TrafficScaler:
 def build_frame(
     hub: str,
     obs_hub: pd.DataFrame,
-    events_hub: pd.DataFrame,
+    events_hub: pd.DataFrame | None,
     spec: FeatureSpec,
     scaler: TrafficScaler,
     start=None,
@@ -179,7 +179,7 @@ def build_frame(
     for i, name in enumerate(CALENDAR_FEATURES):
         frame[name] = cal[:, i]
     feat_events = events_hub
-    if spec.event_sources is not None and "source" in events_hub:
+    if events_hub is not None and spec.event_sources is not None and "source" in events_hub:
         feat_events = events_hub[events_hub["source"].isin(spec.event_sources)]
     ev = event_features(hours, feat_events, spec.event_mode, known_cutoff=known_cutoff)
     for i, name in enumerate(spec.event_names):
@@ -266,7 +266,7 @@ def make_windows(
             np.array([hub] * int(ok.sum())), fr.index[issue_pos][ok].to_numpy(),
             fut("speed")[ok], fut("is_event")[ok].astype(bool), fut("is_holiday")[ok].astype(bool), fut("naive")[ok],
         ))
-    if not parts:
+    if not any(len(part) for part in parts):
         empty = np.zeros((0,))
         return Windows(np.zeros((0, L, len(past_cols)), "float32"), np.zeros((0, H, len(spec.future_names())), "float32"),
                        np.zeros((0, H), "float32"), empty.astype(str), empty.astype("datetime64[ns]"),
