@@ -1,7 +1,7 @@
 #!/bin/bash
 # 실시간 수집분 자동 반영 (macOS 백그라운드): GitHub data-collect 브랜치 → DB → 예측 기록
 #
-#   scripts/sync_collected.sh            # 한 번 실행 (fetch → import → 서버가 켜져 있으면 /predict)
+#   scripts/sync_collected.sh            # 한 번 실행 (fetch → import → 서버가 켜져 있으면 /predict → 드리프트 점검)
 #   scripts/sync_collected.sh install    # 맥 백그라운드에 등록: 매시 20·50분 자동 실행 (로그인 상태일 때)
 #   scripts/sync_collected.sh status     # 등록 여부 확인
 #   scripts/sync_collected.sh stop       # 잠깐 멈추기 (재부팅·재로그인하면 다시 켜짐)
@@ -40,6 +40,17 @@ run() {
     code=$(curl -s -o /dev/null -w '%{http_code}' -m 120 -X POST "$API_URL/predict" \
       -H 'Content-Type: application/json' -d '{}')
     echo "예측 호출: HTTP $code"
+    # 드리프트 주기 점검: 구간별 판정 → 드리프트면 aiops.log 에 [WARN] (on_drift=retrain 이면 재학습까지)
+    curl -s -m 600 -X POST "$API_URL/monitoring/drift/check" | .venv/bin/python -c '
+import json, sys
+try:
+    r = json.load(sys.stdin)
+    n = {}
+    for x in r["results"]:
+        n[x["status"]] = n.get(x["status"], 0) + 1
+    print("드리프트 점검:", n, "| 드리프트:", r["drift"] or "없음")
+except Exception as e:
+    print("드리프트 점검 실패:", e)'
   else
     echo "서버($API_URL) 꺼짐 - 예측 호출 건너뜀"
   fi

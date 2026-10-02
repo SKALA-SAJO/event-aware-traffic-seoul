@@ -192,6 +192,7 @@ flowchart LR
   BR -->|git fetch| SYNC
   SYNC -->|import_collected 1시간 평균| DB
   SYNC -->|/predict 예측 기록| API
+  SYNC -->|/monitoring/drift/check 주기 점검| DRIFT
   DB --> TR --> MLF
   MLF -->|production 로드| API
   API -->|예측 기록| DB
@@ -207,7 +208,7 @@ flowchart LR
 |---|---|---|
 | 데이터 업로드 | `scripts/import_*.py`, `POST /data/upload`, `POST /events(/upload)` | 원천 → 구간 단위(거리 가중 조화평균) 관측·이벤트 |
 | 실시간 수집 | cron-job.org → `.github/workflows/collect_realtime.yml`, `collect_events.yml` → `data-collect` 브랜치 | 15분 스냅숏(속도·돌발) + 당일 경기 상태(우천취소), 매일 일정·경찰청 집회(`collect_rallies.py`). GitHub 예약 실행이 불안정해 외부 스케줄러가 실행을 호출 |
-| DB 자동 반영 | `scripts/sync_collected.sh` (macOS launchd, 매시 20·50분) → `scripts/import_collected.py` → `/predict` | 1시간 평균으로 DB 반영(처음엔 최근 24시간이 찬 뒤), 일정은 처음 보인 시각을 공개 시각으로, 예측 기록 저장 |
+| DB 자동 반영 | `scripts/sync_collected.sh` (macOS launchd, 매시 20·50분) → `scripts/import_collected.py` → `/predict` → `/monitoring/drift/check` | 1시간 평균으로 DB 반영(처음엔 최근 24시간이 찬 뒤), 일정은 처음 보인 시각을 공개 시각으로, 예측 기록 저장, **드리프트 주기 점검**(드리프트면 `[WARN]`) |
 | 학습·레지스트리 | `serving_app/train_and_register.py`, MLflow(sqlite) | 학습 → 게이트 → 등록 → alias `production` |
 | 서빙 | `serving_app/main.py` (FastAPI), `serving_app/Dockerfile` (포트 8099) | Production 모델 로드, 예측·이벤트·데이터 API, 대시보드 |
 | 예측 기록·로그 | `predictions` 테이블, `logs/aiops.log` | 드리프트 판정 재료, 운영 이력 |
@@ -232,7 +233,8 @@ Swagger UI: `http://localhost:8077/docs` (로컬) / `http://localhost:8099/docs`
 | POST | `/events/upload` | 이벤트 CSV 일괄 등록 | 200, 422 |
 | PATCH | `/events/{id}/status` | 검토 확정 / 취소(공지 시각 기록) | 200, 404, 422 |
 | DELETE | `/events/{id}` | 이벤트 삭제 | 200, 404 |
-| GET | `/monitoring/drift` | 구간별 드리프트 판정 | 200 |
+| GET | `/monitoring/drift` | 구간별 드리프트 판정 (조회용, 기록이 없으면 과거 재현) | 200 |
+| POST | `/monitoring/drift/check` | 드리프트 주기 점검: 실제 예측 기록으로 판정, 드리프트면 `[WARN]` (on_drift=retrain 이면 재학습) | 200, 503 |
 | GET | `/incidents` | 돌발 정보 | 200, 422 |
 | GET | `/logs`, `/logs/{filename}` | aiops 로그 목록·내용 | 200, 422 |
 
@@ -394,7 +396,7 @@ $ curl localhost:8099/health
 
 | 구분 | 내용 |
 |---|---|
-| 운영 전환 | 드리프트 점검·알림의 주기 실행 (지금은 대시보드·`/monitoring/drift` 조회 시에만 판정). 완료: 매시 DB 반영·예측 기록(`sync_collected.sh`), 경찰청 집회 매일 수집 |
+| 운영 전환 | 14일 주기 재학습 예약, 상시 서버 이전, 경보 메신저 연동. 완료: 매시 DB 반영·예측 기록·**드리프트 주기 점검**(`sync_collected.sh` → `/monitoring/drift/check`), 경찰청 집회 매일 수집 |
 | 게이트 | 재학습 시 게이트 ① 기준을 평가 구간에서 다시 계산 (도로 사정 변화 시 개선 모델이 막히는 문제) |
 | 모델 | 공연 피처 재설계(경기장 콘서트·공원 축제 구분), 경기별 규모 차이, 날씨, 집회 피처 세부 조정 |
 | 검증 | 실시간 속도(15분 스냅숏 평균)와 TOPIS 시간 평균 일치 여부, 실험 ①③④⑤ 최종 설정·시드 3개 재실행 |

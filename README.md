@@ -160,8 +160,9 @@ python serving_app/train_and_register.py --fine-tune              # 14일마다
 
 ### DB 자동 반영 (macOS 백그라운드)
 
-수동 반영(`git fetch` + `import_collected.py`)과 예측 기록(`/predict`)을 맥이 매시 20·50분에 자동으로 실행합니다.
-예측 기록이 쌓여야 실데이터로 드리프트 판정(예측 vs 1시간 뒤 실측)이 돌아갑니다.
+수동 반영(`git fetch` + `import_collected.py`), 예측 기록(`/predict`), 드리프트 주기 점검(`POST /monitoring/drift/check`)을
+맥이 매시 20·50분에 자동으로 실행합니다. 예측 기록이 쌓여야 실데이터로 드리프트 판정(예측 vs 1시간 뒤 실측)이 돌아가고,
+드리프트면 `logs/aiops.log` 에 `[WARN]` 이 남습니다(`retrain.on_drift: retrain` 이면 재학습·게이트까지). 점검 결과는 `logs/sync.log` 에 요약됩니다.
 
 ```bash
 scripts/sync_collected.sh install    # 등록 (처음 한 번)
@@ -244,12 +245,14 @@ MAE·RMSE 를 전체/평상/이벤트, corridor 별로 보고하고, 비교 기�
 | GET | `/incidents` | 돌발 정보 |
 | POST/GET | `/data/upload`, `/data/status` | corridor CSV 적재 · 현황(교통량 도착 지연 포함) |
 | GET | `/hubs`, `/health`, `/monitoring/drift`, `/logs` | 거점·corridor·상태·드리프트·aiops 로그 |
+| POST | `/monitoring/drift/check` | 드리프트 주기 점검 (구간별 판정 → 드리프트면 `[WARN]`, 매시 `sync_collected.sh` 가 호출) |
 
 ## 남은 과제
 
 **운영 전환 시 필수**
 - 실시간 수집은 동작 중(cron-job.org → GitHub Actions, 15분 간격 → 시간 평균), DB 반영은 맥 자동 반영(`scripts/sync_collected.sh`)으로 매시 실행 ("실시간 수집" 참고)
 - ~~경찰청 집회 매일 자동 수집~~ → `collect_events.yml` 에 추가함(`scripts/collect_rallies.py`, 2026-10-02). 러너 접속 끊김은 재시도(User-Agent, 3·6·12초)로 해결, 8건 정상 수집 확인
+- ~~드리프트 주기 점검~~ → `POST /monitoring/drift/check` 를 `sync_collected.sh` 가 매시 호출 (2026-10-02)
 - 14일 주기 재학습 cron (`train_and_register.py --fine-tune`)
 
 **모델 개선**
