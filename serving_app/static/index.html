@@ -651,17 +651,37 @@ function renderChart(container, fc) {
 const ROLE_KO = { inbound: "행사장 방향", outbound: "귀가 방향", through: "" };
 let CORR = {};  // corridor id → {name, hub, role}
 
-function worstPoint(pts) { return pts.reduce((a, p) => (p.extra_min ?? -1e9) > (a.extra_min ?? -1e9) ? p : a, pts[0]); }
+function peakPoint(pts) {
+  // KPI 카드에는 "추가 소요(평소 대비)"의 피크가 나타나는 시각을 보여주고 싶다.
+  // - 지연(+)이 존재하면: 최대 지연(extra_min 최대)
+  // - 전부 단축(-)이면: 최대 단축(extra_min 최소)
+  const xs = pts.filter((p) => p.extra_min != null && !Number.isNaN(p.extra_min));
+  if (!xs.length) return { p: pts[0], label: "피크 시각" };
+  const hasDelay = xs.some((p) => p.extra_min > 0);
+  const hasFaster = xs.some((p) => p.extra_min < 0);
+  if (hasDelay) {
+    const p = xs.reduce((a, b) => (b.extra_min > a.extra_min ? b : a), xs[0]);
+    return { p, label: "최대 지연 시각" };
+  }
+  if (hasFaster) {
+    const p = xs.reduce((a, b) => (b.extra_min < a.extra_min ? b : a), xs[0]);
+    return { p, label: "최대 단축 시각" };
+  }
+  return { p: xs[0], label: "기준 시각" };
+}
 
 function renderHub(hubName, fcs) {
   const card = document.createElement("div");
   card.className = "hub-card";
   const kpis = fcs.map((fc) => {
-    const w = worstPoint(fc.forecast);
+    const { p: w, label } = peakPoint(fc.forecast);
     const role = ROLE_KO[CORR[fc.corridor]?.role] || "";
     const tone = w.extra_min > 0 ? "is-delay" : w.extra_min < 0 ? "is-faster" : "";
+    const usual = w.usual_travel_time_min != null ? fmtDuration(w.usual_travel_time_min) : null;
+    const pred = fmtDuration(w.travel_time_min);
+    const tt = usual ? `${pred} (평소 ${usual})` : pred;
     return `<div class="dir-kpi ${tone}"><div class="v">${fmtExtra(w.extra_min)}</div>
-      <div class="l">${esc(fc.corridor_name)}${role ? ` <span class="badge">${role}</span>` : ""}<br>평소 대비 · ${esc(w.target_ts.slice(11, 16))}<br>예상 소요 ${fmtDuration(w.travel_time_min)}</div></div>`;
+      <div class="l">${esc(fc.corridor_name)}${role ? ` <span class="badge">${role}</span>` : ""}<br>${label} · ${esc(w.target_ts.slice(11, 16))}<br>예상 소요 ${tt}</div></div>`;
   }).join("");
   const evNames = [...new Set(fcs.flatMap((fc) => fc.forecast.flatMap((p) => p.events)))];
   const evSummary = evNames.slice(0, 2).join(", ") + (evNames.length > 2 ? ` 외 ${evNames.length - 2}건` : "");
