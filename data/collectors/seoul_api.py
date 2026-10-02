@@ -28,9 +28,9 @@ PAGE = 1000
 
 
 def _key() -> str:
-    key = os.getenv("SEOUL_API_KEY")
+    key = os.getenv("SEOUL_API_KEY") or os.getenv("SEOUL_OPENAPI_KEY")  # 팀 .env 는 SEOUL_OPENAPI_KEY
     if not key:
-        raise RuntimeError("SEOUL_API_KEY 환경변수를 설정하세요 (서울 열린데이터광장 인증키)")
+        raise RuntimeError("SEOUL_API_KEY(또는 SEOUL_OPENAPI_KEY) 환경변수를 설정하세요 (서울 열린데이터광장 인증키)")
     return key
 
 
