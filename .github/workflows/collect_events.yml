@@ -3,6 +3,10 @@
 # 일정마다 처음 보인 날이 "실제로 알 수 있었던 시점"의 근거가 됩니다.
 # 노트북에서 git fetch origin data-collect && python scripts/import_collected.py 로 DB 에 넣습니다.
 #
+# 같은 실행에서 경찰청 "오늘의 주요집회"(collect_rallies.py)도 받습니다 → collected/rallies/날짜.csv, collected/smpa_txt/.
+# 집회는 학습 피처(smpa)라 매일 받지 않으면 운영 중 집회가 비게 됩니다. 이 단계가 실패해도 일정 수집은 계속됩니다
+# (해외 러너에서 경찰청 사이트 접속이 막힐 수 있음 - 실행 로그의 "집회" 줄과 collected/rallies 파일 유무로 확인).
+#
 # 준비: Secrets 에 KOPIS_API_KEY (KOPIS 인증키). 없으면 경기 일정만 받습니다.
 # 속도 수집(collect_realtime.yml)과 같은 브랜치에 커밋합니다. 그룹을 같게 두면 대기 중인 실행이 다음 실행에
 # 밀려 취소될 수 있어 그룹은 따로 두고, 푸시가 겹치면 최신을 받아 다시 올립니다.
@@ -48,7 +52,15 @@ jobs:
           KOPIS_API_KEY: ${{ secrets.KOPIS_API_KEY }}
         run: python scripts/collect_events.py --out store/collected
 
+      - name: 경찰청 집회 수집 (pdftotext 필요)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          which pdftotext || (sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils)
+          python scripts/collect_rallies.py --out store/collected
+
       - name: 커밋·푸시
+        if: ${{ !cancelled() }}
         working-directory: store
         run: |
           git config user.name "github-actions[bot]"

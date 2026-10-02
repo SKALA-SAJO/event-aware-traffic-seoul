@@ -9,6 +9,8 @@ GitHub Actions 가 15분마다 쌓은 스냅숏(data-collect 브랜치) → 링�
     속도  : collected_at 을 시간대(HH:00)로 내려 링크별 평균 → link_speed(source=api)
             한 시간대에 스냅숏이 min_snapshots 개 미만이면 건너뜀 (아직 수집 중인 시간대·누락 대비)
     돌발  : acc_id 별 마지막으로 본 시각을 last_seen 으로 → incidents
+    집회  : 하루 1회 경찰청 게시판 수집(collect_rallies.py) → 신고 1,000명 이상을 이벤트(source=smpa)로. 과거 집회와 같은
+            출처·제목 규칙이라 같은 일정은 덮어쓴다. 행진·차로 통제·동(洞)은 본문 텍스트에서 규칙으로 추출
     이벤트: 하루 1회 스냅숏(collect_events.py). 일정마다 가장 최근 스냅숏의 내용을 쓰고,
             announced_at = min(수집기의 가정값, 처음 보인 시각) - 실제로 먼저 보였으면 그 시각이 근거가 됨.
             취소는 처음 '취소'로 보인 시각을 status_changed_at 으로 (수집기 가정값보다 늦으면 이쪽을 씀)
@@ -112,9 +114,40 @@ def _import_rest(read) -> None:
         rows = [{**r, "last_seen": r["collected_at"], "source": "api"} for r in last.to_dict("records")]
         print(f"돌발: {storage.upsert_incidents(rows)}건")
 
+    rl = read("rallies")
+    if not rl.empty:
+        import_rallies(rl)
+
     ev = read("events")
     if not ev.empty:
         import_events(ev)
+
+
+def import_rallies(rl: pd.DataFrame, min_count: int = 1000) -> None:
+    """collected/rallies 스냅숏 → 집회 이벤트. 같은 건은 가장 최근 스냅숏의 내용을 쓴다."""
+    import re
+    import tempfile
+
+    from data.collectors.rallies import to_events
+    from data.event_nlp import extract_rule
+
+    key = ["date", "start", "end", "count", "station", "place"]
+    rl = rl.sort_values("fetched_at")
+    first_seen = rl.groupby(key)["fetched_at"].transform("min")
+    latest = rl.assign(first_seen=first_seen).groupby(key).tail(1).reset_index(drop=True)
+    # 공개 시각이 비어 있으면(작성 시각·게시일을 못 읽은 PDF) 처음 받은 시각 - 그 전에는 알 수 없었으므로 보수적
+    latest["announced_at"] = latest["announced_at"].where(latest["announced_at"].notna() & (latest["announced_at"] != ""),
+                                                          latest["first_seen"])
+    flags = latest["text"].fillna("").map(extract_rule)
+    latest["march"] = flags.map(lambda f: int(f["march"]))
+    latest["lane"] = flags.map(lambda f: int(f["lane_control"]))
+    # 영등포서 관할 중 여의도 집회만 거점에 붙이는 규칙(rally_dong_keywords)이 쓰는 동 표기: 장소 뒤 "<여의도동 등>"
+    latest["dong"] = latest["place"].fillna("").map(lambda s: (re.search(r"<([^<>]*?)>", s) or [None, ""])[1])
+    with tempfile.NamedTemporaryFile("w", suffix=".csv", encoding="utf-8", newline="") as f:
+        latest.drop(columns=["text", "first_seen", "fetched_at"]).to_csv(f.name, index=False)
+        records = to_events(f.name, None, min_count)
+    ids = storage.upsert_events(records)  # march·lane_control 은 원천 값 그대로 (텍스트 추출로 덮지 않음)
+    print(f"집회: 스냅숏 {rl['fetched_at'].nunique()}회 → {len(latest)}건 중 신고 {min_count:,}명 이상 {len(ids)}건 반영")
 
 
 def import_events(ev: pd.DataFrame) -> None:
