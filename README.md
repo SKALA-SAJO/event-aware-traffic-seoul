@@ -146,7 +146,7 @@ python serving_app/train_and_register.py --fine-tune              # 14일마다
 | 워크플로 | 주기 | 내용 → `data-collect` 브랜치 |
 |---|---|---|
 | `collect_realtime.yml` | 15분 | 구간 링크 현재 속도(`TrafficInfo`) + 구간에 걸린 돌발(`AccInfo`) → `collected/speed/`, `incidents/`. 같은 실행에서 오늘·내일 KBO·K리그 경기 상태(우천취소 등)를 다시 받아 `collected/events/날짜_status.csv` 에 바뀐 것만 덧붙임 |
-| `collect_events.yml` | 매일 19:30 | 앞으로 90일 KOPIS·KBO·K리그 일정 → `collected/events/` (일정마다 처음 보인 날 = 실제 공개 시점). 같은 실행에서 경찰청 "오늘의 주요집회" → `collected/rallies/`, `smpa_txt/` (학습 피처 smpa, `import_collected.py` 가 신고 1,000명 이상을 이벤트로 반영) |
+| `collect_events.yml` | 매일 19:37 (KST) | 앞으로 90일 KOPIS·KBO·K리그 일정 → `collected/events/` (일정마다 처음 보인 날 = 실제 공개 시점). 같은 실행에서 경찰청 "오늘의 주요집회" → `collected/rallies/`, `smpa_txt/` (학습 피처 smpa, `import_collected.py` 가 신고 1,000명 이상을 이벤트로 반영) |
 
 - 준비: 저장소 Settings → Secrets 에 `SEOUL_API_KEY`, `KOPIS_API_KEY`
 - `collected/speed/` 열: `collected_at, link_id, speed, corridor, segment` (예: `gwanghwamun_up`, `세종대로 광화문→세종대로사거리`). 열이 3개뿐인 예전 파일은 다음 수집 때 자동으로 5열로 바뀜. 링크 대응표 전체는 main 브랜치의 `config/corridor_links.yaml` (`data-collect` 브랜치에는 `collected/` 만 있음)
