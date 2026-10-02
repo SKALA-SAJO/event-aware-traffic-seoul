@@ -21,7 +21,7 @@
 - 데이터를 넣기 전과 비교 (실험 ⑥, 시드 3개, 같은 평가 기준): 이벤트 시간 1.747 → **1.704**, 광화문·여의도 4~7% 개선, 평상 시간 변화 없음
   (실험 ⑥은 2023~2024 경기 일정 적재 전에 실행. 경기 일정을 채운 v4 는 v3 대비 이벤트 시간 1.92 → 1.89 추가 개선)
 - 방향별 예측이 거점 평균 예측보다 이벤트 시간 오차 약 24% 낮음 (실험 ④)
-- **운영 전 필수**: 실시간 수집 cron(15분 → 시간 평균), 경찰청 집회 매일 자동 수집 - "남은 과제" 참고
+- 운영: 실시간 수집(15분 → 시간 평균)과 경찰청 집회 매일 수집 동작 중 - "실시간 수집" 참고
 
 HAIC 주가 예측 실습의 뼈대(FastAPI 서빙 → MLflow 게이트·승격 → 드리프트 감지 → warm-start fine-tuning →
 aiops.log → Docker)를 그대로 쓰고, 데이터 계층과 모델 입력을 교통 예측에 맞게 바꿨습니다.
@@ -59,7 +59,7 @@ aiops.log → Docker)를 그대로 쓰고, 데이터 계층과 모델 입력을 
 
 **가정 (리포트에 함께 표기)**
 - 과거 경기 일정의 공개 시각은 남아 있지 않아 "경기 7일 전 공개"로 가정합니다(정규시즌 일정은 시즌 전에 발표되므로 보수적).
-- 우천취소 공지 시각은 "경기 시작 2시간 전"으로 가정합니다.
+- 우천취소 공지 시각은 "경기 시작 2시간 전"으로 가정합니다. 10-02부터는 15분 수집에서 처음 '취소'로 보인 시각을 우선 사용합니다.
 - 경기 규모는 관중 수가 아니라 경기장 수용 인원입니다(관중 수는 경기 후에 확정되므로 정보 누수).
 - KOPIS 공개 시각은 첫 공연 전 마지막 갱신 시각(`updatedate`)입니다. 첫 공연 이후에 갱신된 공연(33건)만 30일 전 공개로 가정합니다.
 - KOPIS 공연 시간이 비어 있고 축제이거나 낮(15시 이전)에 시작하면 종일 행사로 보고 22시 종료로 추정합니다.
@@ -146,7 +146,7 @@ python serving_app/train_and_register.py --fine-tune              # 14일마다
 | 워크플로 | 주기 | 내용 → `data-collect` 브랜치 |
 |---|---|---|
 | `collect_realtime.yml` | 15분 | 구간 링크 현재 속도(`TrafficInfo`) + 구간에 걸린 돌발(`AccInfo`) → `collected/speed/`, `incidents/`. 같은 실행에서 오늘·내일 KBO·K리그 경기 상태(우천취소 등)를 다시 받아 `collected/events/날짜_status.csv` 에 바뀐 것만 덧붙임 |
-| `collect_events.yml` | 매일 19:37 (KST) | 앞으로 90일 KOPIS·KBO·K리그 일정 → `collected/events/` (일정마다 처음 보인 날 = 실제 공개 시점). 같은 실행에서 경찰청 "오늘의 주요집회" → `collected/rallies/`, `smpa_txt/` (학습 피처 smpa, `import_collected.py` 가 신고 1,000명 이상을 이벤트로 반영) |
+| `collect_events.yml` | 매일 19:30 (KST, cron-job.org) | 앞으로 90일 KOPIS·KBO·K리그 일정 → `collected/events/` (일정마다 처음 보인 날 = 실제 공개 시점). 같은 실행에서 경찰청 "오늘의 주요집회" → `collected/rallies/`, `smpa_txt/` (학습 피처 smpa, `import_collected.py` 가 신고 1,000명 이상을 이벤트로 반영) |
 
 - 준비: 저장소 Settings → Secrets 에 `SEOUL_API_KEY`, `KOPIS_API_KEY`
 - `collected/speed/` 열: `collected_at, link_id, speed, corridor, segment` (예: `gwanghwamun_up`, `세종대로 광화문→세종대로사거리`). 열이 3개뿐인 예전 파일은 다음 수집 때 자동으로 5열로 바뀜. 링크 대응표 전체는 main 브랜치의 `config/corridor_links.yaml` (`data-collect` 브랜치에는 `collected/` 만 있음)
@@ -156,7 +156,7 @@ python serving_app/train_and_register.py --fine-tune              # 14일마다
 - DB 반영(수동): `git fetch origin data-collect && python scripts/import_collected.py` → 링크별 1시간 평균(스냅숏 2회 이상) → 구간 집계
 - 직전 24시간이 쌓여야 대시보드에서 "지금" 기준 실시간 예측 가능. 그 전에 import 하면 마지막 관측 시각이 바뀌어 기본(최신) 예측이
   "관측치 부족"으로 실패하므로, 처음에는 24시간이 쌓인 뒤 넣으세요 (`--require-hours 24` 가 자동으로 확인).
-  10-02 새벽(01~08시)이 비어 있어 연속 24시간은 10-03 09시경부터 채워집니다
+  10-02 새벽(01~08시)이 비어 있어 연속 24시간은 10-03 08시경부터 채워집니다
 
 ### DB 자동 반영 (macOS 백그라운드)
 
@@ -181,7 +181,7 @@ scripts/sync_collected.sh uninstall  # 완전히 해제
 - `launchctl` 로 직접: 멈추기 `launchctl bootout gui/$(id -u)/com.skala.traffic-sync`,
   해제는 그 뒤 `rm ~/Library/LaunchAgents/com.skala.traffic-sync.plist`, 확인 `launchctl list | grep traffic`
 - 시연의 주력은 재현 시연(과거 시각 예측, `simulate_drift.py`)이고, 이 자동 반영 기록은 "실제로도 운영 중"이라는 보조 근거입니다
-- 아직 안 되는 것: **경찰청 집회 매일 수집**(학습 피처라 운영 전 필수), A매치는 대시보드에서 수동 등록,
+- 아직 안 되는 것: A매치는 대시보드에서 수동 등록,
   실시간 속도(순간값 평균)와 TOPIS 시간 평균의 차이는 10월 TOPIS 엑셀 공개 후 겹치는 기간으로 검증 필요
 
 ## 빠른 시작 (합성 데이터)
@@ -210,7 +210,7 @@ docker compose -f serving_app/docker-compose.yml up --build     # 컨테이너: 
 
 | 실험 | 결론 (실데이터) |
 |---|---|
-| ① | 속도 → +교통량 → +캘린더 → +이벤트 매 단계 개선 |
+| ① | 속도 → +캘린더 → +이벤트 단계마다 개선. 교통량은 잡음 수준이라 제외(`use_volume: false`) |
 | ② | 감쇠(decay) 채택 - 최종 데이터에서 감쇠 1.863 < 텍스트 1.876 < 규모 1.888 < 플래그 1.907 < 이벤트 없음 1.935 |
 | ③ | 14일 주기 재학습 > 고정 > 감지 시 재학습 (임계 1.5·2.0 모두) |
 | ④ | 방향별이 거점 평균보다 이벤트 시간 오차 약 24% 낮음 |
@@ -249,7 +249,7 @@ MAE·RMSE 를 전체/평상/이벤트, corridor 별로 보고하고, 비교 기�
 
 **운영 전환 시 필수**
 - 실시간 수집은 동작 중(cron-job.org → GitHub Actions, 15분 간격 → 시간 평균), DB 반영은 맥 자동 반영(`scripts/sync_collected.sh`)으로 매시 실행 ("실시간 수집" 참고)
-- ~~경찰청 집회 매일 자동 수집~~ → `collect_events.yml` 에 추가함(`scripts/collect_rallies.py`, 2026-10-02). 러너에서 경찰청 사이트 접속이 되는지는 첫 실행 로그로 확인 필요
+- ~~경찰청 집회 매일 자동 수집~~ → `collect_events.yml` 에 추가함(`scripts/collect_rallies.py`, 2026-10-02). 러너 접속 끊김은 재시도(User-Agent, 3·6·12초)로 해결, 8건 정상 수집 확인
 - 14일 주기 재학습 cron (`train_and_register.py --fine-tune`)
 
 **모델 개선**
