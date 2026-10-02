@@ -54,6 +54,31 @@ def drift():
     return [drift_status(c, model) for c in model.units]
 
 
+@router.post("/monitoring/drift/check")
+def drift_check():
+    """
+    주기 점검(scripts/sync_collected.sh 가 매시 예측 기록 직후 호출): 구간마다 실제 예측 기록으로 드리프트를 판정하고
+    드리프트면 aiops.log 에 [WARN] 을 남긴다. retrain.on_drift 가 retrain 이면 재학습·게이트까지 이어진다.
+    과거 재현 판정은 쓰지 않으므로 예측 기록이 쌓이기 전에는 모두 판정 대기(insufficient_data)다.
+    """
+    from serving_app.monitoring.retrain_trigger import check_and_trigger
+
+    try:
+        model = model_loader.get_model()
+    except ModelLoadError as e:
+        raise HTTPException(503, str(e))
+    results = []
+    for corridor in model.units:
+        r = check_and_trigger(corridor)
+        d = r.get("drift", {})
+        results.append({"corridor": corridor, "status": r["status"], "ratio": d.get("ratio"),
+                        "reason": d.get("reason"), "n_hours": d.get("n_hours"),
+                        "retrain": r.get("retrain"), "promoted": r.get("promoted")})
+    return {"checked_at": dt.datetime.now().isoformat(timespec="seconds"), "model_version": model.version,
+            "drift": [x["corridor"] for x in results if x["status"] in ("drift_detected", "retrain_triggered")],
+            "results": results}
+
+
 @router.get("/incidents")
 def incidents(hub: str | None = None, start: dt.datetime | None = None, end: dt.datetime | None = None,
               limit: int = 100):
