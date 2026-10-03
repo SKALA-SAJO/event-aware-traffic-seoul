@@ -61,6 +61,7 @@ def _merge_incidents(path: str, rows: list[dict], now: str) -> None:
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             old = list(csv.DictReader(f))
+    now = str(now)  # CSV 에서 읽은 시각(문자열)과 섞여 정렬·min/max 되므로 같은 형식으로
     merged: dict[str, dict] = {}
     for r in old:  # 예전 형식(collected_at 한 줄씩)도 여기서 first_seen·last_seen 으로 합쳐짐
         seen = r.get("last_seen") or r.get("collected_at")
@@ -71,11 +72,12 @@ def _merge_incidents(path: str, rows: list[dict], now: str) -> None:
     for r in rows:
         prev = merged.get(str(r["acc_id"]))
         merged[str(r["acc_id"])] = {**r, "first_seen": prev["first_seen"] if prev else now, "last_seen": now}
+    rows = sorted(merged.values(), key=lambda r: (r["first_seen"], str(r["acc_id"])))  # 파일을 비우기 전에 정렬
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=INC_COLS, extrasaction="ignore")
         w.writeheader()
-        w.writerows(sorted(merged.values(), key=lambda r: (r["first_seen"], str(r["acc_id"]))))
+        w.writerows(rows)
 
 
 def _upgrade_speed_file(path: str, where: dict) -> None:
