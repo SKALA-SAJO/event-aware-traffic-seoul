@@ -1,0 +1,6 @@
+fetched_at,source,hub,type,title,start,end,expected_size,announced_at,status,status_changed_at,external_id,venue,lat,lon,end_estimated,runtime_text,description
+2026-10-05,kbo_schedule,jamsil,sports,KBO KIA vs LG,2026-10-05 14:00:00,2026-10-05 17:10:00,23750,2026-09-28,scheduled,,,,,,,,잠실야구장 KBO KIA vs LG
+2026-10-05,kbo_schedule,jamsil,sports,KBO NC vs LG,2026-10-06 18:30:00,2026-10-06 21:40:00,23750,2026-09-29,scheduled,,,,,,,,잠실야구장 KBO NC vs LG
+2026-10-05,kbo_schedule,gocheok,sports,KBO KT vs 키움,2026-10-06 18:30:00,2026-10-06 21:40:00,16000,2026-09-29,scheduled,,,,,,,,고척스카이돔 KBO KT vs 키움
+2026-10-05,kbo_schedule,jamsil,sports,KBO 두산 vs LG,2026-10-07 18:30:00,2026-10-07 21:40:00,23750,2026-09-30,scheduled,,,,,,,,잠실야구장 KBO 두산 vs LG
+2026-10-05,kbo_schedule,gocheok,sports,KBO 한화 vs 키움,2026-10-07 18:30:00,2026-10-07 21:40:00,16000,2026-09-30,scheduled,,,,,,,,고척스카이돔 KBO 한화 vs 키움
