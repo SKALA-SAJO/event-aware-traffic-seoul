@@ -1,0 +1,3 @@
+fetched_at,source,hub,type,title,start,end,expected_size,announced_at,status,status_changed_at,external_id,venue,lat,lon,end_estimated,runtime_text,description
+2026-10-07 00:01:00,kbo_schedule,jamsil,sports,KBO 두산 vs LG,2026-10-07 18:30:00,2026-10-07 21:40:00,23750,2026-09-30,scheduled,,,,,,,,잠실야구장 KBO 두산 vs LG
+2026-10-07 00:01:00,kbo_schedule,gocheok,sports,KBO 한화 vs 키움,2026-10-07 18:30:00,2026-10-07 21:40:00,16000,2026-09-30,scheduled,,,,,,,,고척스카이돔 KBO 한화 vs 키움
