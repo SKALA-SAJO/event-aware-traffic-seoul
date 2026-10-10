@@ -1,2 +1,2 @@
 first_seen,last_seen,acc_id,link_id,corridor,hub,type_code,type_name,category,start,expected_end,info
-2026-10-11 05:30:00,2026-10-11 08:00:00,1103553,1010018200,gwanghwamun_down,gwanghwamun,A11,기타,event,2026-10-11 05:30:00,2026-10-11 11:00:00,"2026 서울달리기 행사에 따른 버스 임시우회2026. 10. 11.(일) 05:30~11:10"
+2026-10-11 05:30:00,2026-10-11 08:15:00,1103553,1010018200,gwanghwamun_down,gwanghwamun,A11,기타,event,2026-10-11 05:30:00,2026-10-11 11:00:00,"2026 서울달리기 행사에 따른 버스 임시우회2026. 10. 11.(일) 05:30~11:10"
