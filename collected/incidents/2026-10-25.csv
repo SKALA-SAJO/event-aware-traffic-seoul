@@ -1,2 +1,2 @@
 first_seen,last_seen,acc_id,link_id,corridor,hub,type_code,type_name,category,start,expected_end,info
-2026-10-25 15:30:00,2026-10-25 15:45:00,1106536,1180001700,yeouido_down,yeouido,A02,차량고장,accident,2026-10-25 15:27:00,2026-10-25 16:00:00,신월여의지하도로 인천방향 (신월기점4K→신월기점2K) 1차로 고장차량
+2026-10-25 15:30:00,2026-10-25 16:00:00,1106536,1180001700,yeouido_down,yeouido,A02,차량고장,accident,2026-10-25 15:27:00,2026-10-25 16:30:00,신월여의지하도로 인천방향 (신월기점4K→신월기점2K) 1차로 고장차량
